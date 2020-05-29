@@ -8,6 +8,9 @@ import traceback, sys
 from math import sin, cos
 from random import randint
 
+from tickeragent import TickerAgent
+from spade import quit_spade
+
 COLORS = [
     # 17 undertones https://lospec.com/palette-list/17undertones
     '#000000', '#141923', '#414168', '#3a7fa7', '#35e3e3', '#8fd970', '#5ebb49',
@@ -134,6 +137,8 @@ class MainWindow(QMainWindow):
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
 
+        self.ticker_agent = None
+
         self.counter = 0
 
         layout = QVBoxLayout()
@@ -161,18 +166,42 @@ class MainWindow(QMainWindow):
         self.timer.start()
 
     def progress_fn(self, n):
-        print("%d%% done" % n)
+        print("[progress_fn] %d%% done" % n)
 
     def execute_this_fn(self, progress_callback):
         for n in range(0, 5):
             time.sleep(1)
             progress_callback.emit(int(n * 100 / 4))
 
+        result = QPoint(
+            200 + randint(-100, 100),  # x
+            150 + randint(-100, 100)  # Y
+        )
+
+        return result
+
+    def execute_agent_i_guess(self, progress_callback):
+        self.ticker_agent = TickerAgent("agent@localhost", "password", progress_callback)
+        ticker = self.ticker_agent
+        future = ticker.start()
+        future.result()
+
+        while not ticker.ticker_behav.is_killed():
+            try:
+                time.sleep(1)
+            except KeyboardInterrupt:
+                ticker.stop()
+                break
+
+        print("Agent finished")
+        future = ticker.stop()
+        future.result()
+        quit_spade()
 
         result = QPoint(
             200 + randint(-100, 100),  # x
-            150 + randint(-100, 100)   # Y
-            )
+            150 + randint(-100, 100)  # Y
+        )
 
         return result
 
@@ -184,7 +213,7 @@ class MainWindow(QMainWindow):
 
     def oh_no(self):
         # Pass the function to execute
-        worker = Worker(self.execute_this_fn)  # Any other args, kwargs are passed to the run function
+        worker = Worker(self.execute_agent_i_guess)  # Any other args, kwargs are passed to the run function
         worker.signals.result.connect(self.process_result)
         worker.signals.finished.connect(self.thread_complete)
         worker.signals.progress.connect(self.progress_fn)
