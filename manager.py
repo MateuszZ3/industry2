@@ -31,6 +31,12 @@ class Order:  # todo jak to wysylac (ops po przecinku?)
     status: int  # def: -1 last_acc: i
 
 
+@dataclass
+class GoMOrder:
+    priority: int
+    operation: str
+
+
 class Manager(Agent):
     class MainLoop(CyclicBehaviour):
         """main agent loop"""
