@@ -1,8 +1,6 @@
 import random
-from heapq import heappush, heappop
 import time
-from dataclasses import dataclass
-from typing import List
+from heapq import heappop, heappush
 
 from spade.agent import Agent
 from spade.behaviour import CyclicBehaviour
@@ -28,7 +26,7 @@ class GoMInfo:
 
 class Manager(Agent):
     class MainLoop(CyclicBehaviour):
-        """main agent loop"""
+        """Main agent loop"""
         async def on_start(self):
             print("Starting main loop . . .")
 
@@ -41,7 +39,7 @@ class Manager(Agent):
             msg = Message(gom.aid)
             msg.set_metadata("performative", "request")
             msg.thread = order.id
-            msg.body = order.operations[order.status + 1]
+            msg.body = order.operations[order.status]
             await self.send(msg)
 
         async def on_end(self):
@@ -49,9 +47,9 @@ class Manager(Agent):
 
 
     class OrderRequestHandler(CyclicBehaviour):
-        """request from factory"""
+        """Request from factory"""
         async def run(self):  # todo cyc czy oneshot?
-            msg = await self.receive()
+            msg = await self.receive(timeout=RECEIVE_TIMEOUT)
             heappush(self.agent.orders, (1, msg))
             reply = Message(self.agent.factory_aid)
             reply.set_metadata("performative", "agree")
@@ -59,9 +57,9 @@ class Manager(Agent):
 
 
     class OrderRefuseHandler(CyclicBehaviour):
-        """refuse from GoM"""
+        """Refuse from GoM"""
         async def run(self):
-            msg = await self.receive()
+            msg = await self.receive(timeout=RECEIVE_TIMEOUT)
             oid = msg.thread
             order: Order = self.agent.active_orders[oid]
             heappush(self.agent.orders, order)
@@ -69,24 +67,27 @@ class Manager(Agent):
 
 
     class OrderAgreeHandler(CyclicBehaviour):
-        """agree from GoM"""
+        """Agree from GoM"""
         async def run(self):
-            msg = await self.receive()
+            msg = await self.receive(timeout=RECEIVE_TIMEOUT)
+            print('agreement received for order ' + msg.thread)
+            return
             oid = msg.thread
             order: Order = self.agent.active_orders[oid]
-            order.status += 1
 
 
     class OrderDoneHandler(CyclicBehaviour):
-        """inform from GoM"""
+        """Inform from GoM"""
         async def run(self):
-            msg = await self.receive()
+            msg = await self.receive(timeout=RECEIVE_TIMEOUT)
             oid = msg.thread
             order: Order = self.agent.active_orders[oid]
+            order.status += 1
             heappush(self.agent.orders, order)
             self.agent.active_orders[oid] = None
             report = Message(self.agent.factory_aid)
             report.set_metadata("performative", "inform")
+            report.thread = oid
             await self.send(report)
 
 
