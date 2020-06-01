@@ -3,5 +3,5 @@ from enum import auto
 
 
 class Operation(Enum):
-    DRILL = auto
-    MILL = auto
+    DRILL = auto()
+    MILL = auto()
