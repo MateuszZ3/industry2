@@ -1,67 +1,55 @@
-import time
 import asyncio
 import datetime
+import json
+import random
+
 from spade import quit_spade
 from spade.agent import Agent
-from spade.behaviour import OneShotBehaviour, CyclicBehaviour
+from spade.behaviour import PeriodicBehaviour, CyclicBehaviour
 from spade.message import Message
 
-class Order:
-    __unused_id = 1
+from common import Order
+from enums import Operation
+
+
+class OrderFactory:
+    """
+    Creates `Orders`.
+    """
 
     def __init__(self):
-        self.id = Order.__unused_id
-        Order.__unused_id += 1
+        self.unused_id = 1
+        self.op_list = list(Operation)
 
-    def __str__(self):
-        return f"order id: {self.id}"
+    def create(self) -> Order:
+        ops = [random.choice(self.op_list) for i in range(4)]
+        order = Order(
+            priority=1,
+            id=self.unused_id,
+            status=0,
+            operations=ops
+        )
 
+        self.unused_id += 1
 
-class VerboseCyclicBehaviour(CyclicBehaviour):
-    async def on_start(self):
-        print(f"Starting {type(self).__name__}...")
-
-    async def on_end(self):
-        print(f"{type(self).__name__} finished with exit code {self.exit_code}.")
-
-    async def run(self):
-        pass
+        return order
 
 
 class FactoryAgent(Agent):
-    class TickerBehav(VerboseCyclicBehaviour):
-        """
-        tmp
-        """
 
-        def __init__(self, progress_callback):
-            super().__init__()
-            self.progress_callback = progress_callback
-            self.sleep_period = 1
-            self.counter = 0
-            self.limit = 10
-
-        async def run(self):
-            self.progress_callback.emit(self.counter)  # Emit progress signal with int
-
-            print(f"[TickerBehav] Counter: {self.counter}")
-            self.counter += 1
-
-            if self.counter == self.limit:
-                self.kill(exit_code=0)
-                return
-            await asyncio.sleep(self.sleep_period)
-
-    class OrderBehav(OneShotBehaviour):
+    class OrderBehav(PeriodicBehaviour):
         """
         Cyclically generates orders and sends them to Manager Agent.
         """
 
         def __init__(self):
-            super().__init__()
+            super().__init__(10)
 
         async def run(self):
-            order = Order()
+            # print(f"Running {type(self).__name__}...")
+
+            # Czy to jest dobre podejście?
+            order = self.agent.order_factory.create()
 
             # Send request
             msg = Message(to="manager@localhost")
@@ -71,27 +59,29 @@ class FactoryAgent(Agent):
             msg.body = f"{order}"  # Set the message content
 
             await self.send(msg)
-            print("Message sent!")
+            print(f"Message sent!\n{msg}")
 
             # set exit_code for the behaviour
             self.exit_code = "Job Finished!"
 
+            self.agent.progress_callback.emit(order.id)  # tmp: Emit progress signal with int
 
     def __init__(self, jid, password, verify_security=False):
         super().__init__(jid, password, verify_security=False)
-        self.ticker_behav = None
-        self.order_behav = None
-        self.progress_callback = None
+        self.unused_id = 1
         self.orders = []
+        self.order_factory = OrderFactory()
+
+        self.order_behav = None
+
+        self.progress_callback = None
 
     async def setup(self):
         print(f"TickerAgent started at {datetime.datetime.now().time()}")
         if self.progress_callback is None:
             raise Exception("progress callback not set")
 
-        self.ticker_behav = self.TickerBehav(self.progress_callback)
         self.order_behav = self.OrderBehav()
-        self.add_behaviour(self.ticker_behav)
         self.add_behaviour(self.order_behav)
 
     def set_progress_callback(self, callback):

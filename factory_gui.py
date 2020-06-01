@@ -98,10 +98,11 @@ class Canvas(QLabel):
         self.pen_color = QtGui.QColor(COLORS[3])
         self.bounding_rect = QRect(0, 0, self.width(), self.height())
 
-        self.points = [QPoint(0, 0)]
+        self.agents = [QPoint(0, 0)]
+        self.goms = []
 
     def add_point(self, pt):
-        self.points.append(pt)
+        self.agents.append(pt)
 
     def clear_scene(self):
         """
@@ -121,8 +122,8 @@ class Canvas(QLabel):
         p.setColor(self.pen_color)
         painter.setPen(p)
 
-        # Draw test points
-        for pt in self.points:
+        # Draw test agents
+        for pt in self.agents:
             painter.drawPoint(pt)
 
         painter.end()
@@ -135,7 +136,7 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__(*args, **kwargs)
 
         # Agent
-        self.factory_agent = FactoryAgent("agent@localhost", "password")
+        self.factory_agent = FactoryAgent("factory@localhost", "password")
 
         # Layout
         layout = QVBoxLayout()
@@ -165,7 +166,7 @@ class MainWindow(QMainWindow):
         self.timer.start()
 
     def progress_fn(self, n):
-        print("[progress_fn] %d%% done" % n)
+        print(f"[progress_fn] {n}")
 
     def execute_agent(self, progress_callback):
         agent = self.factory_agent
@@ -173,7 +174,7 @@ class MainWindow(QMainWindow):
         future = agent.start()
         future.result()
 
-        while not agent.ticker_behav.is_killed():
+        while agent.is_alive():
             try:
                 time.sleep(1)
             except KeyboardInterrupt:
@@ -185,15 +186,10 @@ class MainWindow(QMainWindow):
         future.result()
         quit_spade()
 
-        result = QPoint(
-            200 + randint(-100, 100),  # x
-            150 + randint(-100, 100)  # Y
-        )
-
-        return result
+        return "Successful result"
 
     def process_result(self, result):
-        self.canvas.add_point(result)
+        print(f"Worker result:\n{result}")
 
     def thread_complete(self):
         print("THREAD COMPLETE!")
@@ -213,8 +209,8 @@ class MainWindow(QMainWindow):
 
     def recurring_timer(self):
         self.counter += 0.05
-        self.canvas.points[0].setX(round(cos(self.counter) * 100) + 120)
-        self.canvas.points[0].setY(round(sin(self.counter) * 100) + 120)
+        self.canvas.agents[0].setX(round(cos(self.counter) * 100) + 120)
+        self.canvas.agents[0].setY(round(sin(self.counter) * 100) + 120)
         self.canvas.draw_scene()
 
 
