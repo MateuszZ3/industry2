@@ -1,7 +1,9 @@
+import json
+import sys
 from dataclasses import dataclass
 from typing import List
 
-from enums import *
+from enums import Operation
 
 
 @dataclass
@@ -16,3 +18,20 @@ class Order:
 class GoMOrder:
     priority: int
     operation: Operation
+
+
+def serialize(data, info=''):
+    payload = {}
+    for field in data.__dataclass_fields__.keys():
+        payload[field] = getattr(data, field)
+    return json.dumps({
+        'class': type(data).__name__,
+        'payload': payload,
+        'info': info
+    })
+
+def deserialize(body):
+    data = json.loads(body)
+    current_module = sys.modules[__name__]
+    instance = getattr(current_module, data['class'])(**data['payload'])
+    return instance, data['info']

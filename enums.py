@@ -1,7 +1,6 @@
-from enum import Enum
-from enum import auto
+from enum import Enum, auto
 
 
 class Operation(Enum):
-    DRILL = auto
-    MILL = auto
+    DRILL = auto()
+    MILL = auto()
