@@ -1,20 +1,26 @@
 from dataclasses import dataclass
 from typing import List
 
-from enums import *
+from dataclasses_json import dataclass_json
+
+from enums import Operation
 
 
+@dataclass_json
 @dataclass
 class Order:
     priority: int  # N, 0 max
-    id: int
+    order_id: int  # unique
     operations: List[Operation]
-    status: int  # index of current operation
+    current_operation: int  # index
 
 
+@dataclass_json
 @dataclass
 class GoMOrder:
-    priority: int
+    priority: int  # N, 0 max
+    order_id: int  # unique
+    location: str  # "" - warehouse, "address@host" - socket_id
     operation: Operation
 
 
