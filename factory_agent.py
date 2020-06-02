@@ -29,8 +29,8 @@ class OrderFactory:
         ops = [random.choice(self.op_list) for i in range(4)]
         order = Order(
             priority=1,
-            id=self.unused_id,
-            status=0,
+            order_id=self.unused_id,
+            current_operation=0,
             operations=ops
         )
 
@@ -54,14 +54,11 @@ class FactoryAgent(Agent):
         Cyclically generates orders and sends them to Manager Agent.
         """
 
-        def __init__(self):
-            super().__init__(10)
-
         async def run(self):
             # print(f"Running {type(self).__name__}...")
 
             order = self.agent.order_factory.create()
-            self.agent.orders[order.id] = order
+            self.agent.orders[order.order_id] = order
 
             # Send request
             msg = Message(to=f"manager@{settings.HOST}")
@@ -74,7 +71,7 @@ class FactoryAgent(Agent):
             # set exit_code for the behaviour
             self.exit_code = "Job Finished!"
 
-            self.agent.update_callback.emit(order.id)  # tmp: Emit progress signal with int
+            self.agent.update_callback.emit(order.order_id)  # tmp: Emit progress signal with int
 
     class OrderAgreeHandler(CyclicBehaviour):
         """
@@ -106,8 +103,8 @@ class FactoryAgent(Agent):
             if msg is not None:
                 print(msg)
 
-    def __init__(self, jid, password, verify_security=False):
-        super().__init__(jid, password, verify_security=False)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         # Orders
         self.unused_id = 1
         self.orders = {}
@@ -133,7 +130,7 @@ class FactoryAgent(Agent):
         self.create_positions()
 
         # Behaviours
-        self.order_behav = self.OrderBehav()
+        self.order_behav = self.OrderBehav(10.0)
         self.agr_handler = self.OrderAgreeHandler()
         self.fail_handler = self.OrderFailureHandler()
         self.done_handler = self.OrderDoneHandler()
