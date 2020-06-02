@@ -14,6 +14,9 @@ class Order:
     operations: List[Operation]
     current_operation: int  # index
 
+    def is_done(self):
+        return len(self.operations) <= self.current_operation
+
 
 @dataclass_json
 @dataclass

@@ -70,7 +70,7 @@ class Manager(Agent):
         """Refuse from GoM"""
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
-            oid = msg.thread
+            oid = int(msg.thread)
             order: Order = self.agent.active_orders[oid]
             heappush(self.agent.orders, order)
             self.agent.active_orders[oid] = None
@@ -90,12 +90,15 @@ class Manager(Agent):
             order: Order = self.agent.active_orders[int(oid)]
             order.current_operation += 1
             self.agent.last_operation_location[oid] = msg.sender
-            heappush(self.agent.orders, order)
-            self.agent.active_orders[oid] = None
-            report = Message(self.agent.factory_jid)
-            report.set_metadata("performative", "inform")
-            report.thread = oid
-            await self.send(report)
+            if not order.is_done():
+                heappush(self.agent.orders, order)
+            else:
+                self.agent.last_operation_location[oid] = None
+                self.agent.active_orders[oid] = None
+                report = Message(self.agent.factory_jid)
+                report.set_metadata("performative", "inform")
+                report.thread = oid
+                await self.send(report)
 
     def __init__(self, factory_jid: str, gom_infos, *args, **kwargs):
         super().__init__(*args, **kwargs)
