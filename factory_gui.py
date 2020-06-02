@@ -10,12 +10,15 @@ from random import randint
 
 from factory_agent import FactoryAgent
 from spade import quit_spade
+import settings
+
+from common import Point
 
 COLORS = [
     # 17 undertones https://lospec.com/palette-list/17undertones
     '#000000', '#141923', '#414168', '#3a7fa7', '#35e3e3', '#8fd970', '#5ebb49',
     '#458352', '#dcd37b', '#fffee5', '#ffd035', '#cc9245', '#a15c3e', '#a42f3b',
-    '#f45b7a', '#c24998', '#81588d', '#bcb0c2', '#ffffff',
+    '#f45b7a', '#c24998', '#81588d', '#bcb0c2', '#d7d7d7', '#ffffff',
 ]
 
 
@@ -68,7 +71,7 @@ class Worker(QRunnable):
         self.signals = WorkerSignals()
 
         # Add the callback to our kwargs
-        self.kwargs['progress_callback'] = self.signals.progress
+        self.kwargs['update_callback'] = self.signals.progress
 
     @pyqtSlot()
     def run(self):
@@ -91,43 +94,76 @@ class Worker(QRunnable):
 
 class Canvas(QLabel):
 
-    def __init__(self):
+    def __init__(self, factory_agent):
         super().__init__()
-        pixmap = QtGui.QPixmap(600, 300)
+        # Color definitions
+        self.gom_color = QtGui.QColor(COLORS[3])
+        self.tr_color = QtGui.QColor(COLORS[14])
+        self.aside_color = QtGui.QColor(COLORS[2])
+        self.bg_color = QtGui.QColor(COLORS[-2])
+
+        pixmap = QtGui.QPixmap(self.width(),self.height())
+        pixmap = pixmap.scaled(self.width(), self.height(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        pixmap.fill(self.bg_color)
         self.setPixmap(pixmap)
-        self.pen_color = QtGui.QColor(COLORS[3])
-        self.bounding_rect = QRect(0, 0, self.width(), self.height())
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        self.setAlignment(Qt.AlignCenter)
+        self.setMinimumSize(10, 10)
 
+        self.factory_agent = factory_agent
         self.agents = [QPoint(0, 0)]
-        self.goms = []
 
-    def add_point(self, pt):
-        self.agents.append(pt)
+    def resizeEvent(self, event) -> None:
+        pixmap = QtGui.QPixmap(self.width(),self.height())
+        pixmap.fill(self.bg_color)
+        pixmap = pixmap.scaled(self.width(), self.height(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.setPixmap(pixmap)
 
-    def clear_scene(self):
+    def clear_scene(self) -> None:
         """
         Clears scene but DOES NOT call update.
         """
 
-        painter = QtGui.QPainter(self.pixmap())
-        painter.fillRect(self.bounding_rect, QtGui.QColor(COLORS[-1]))
-        painter.end()
+        pixmap = self.pixmap()
+        pixmap.fill(QtGui.QColor(COLORS[-2]))
+        self.update()
 
-    def draw_scene(self):
+    def draw_scene(self) -> None:
         self.clear_scene()
-
         painter = QtGui.QPainter(self.pixmap())
         p = painter.pen()
+
+        # Draw set-aside
+        p.setWidth(12)
+        p.setColor(self.aside_color)
+        painter.setPen(p)
+        self.draw_point(self.factory_agent.gom_positions[0], painter)
+
+        p.setColor(self.gom_color)
+        painter.setPen(p)
+        for gom in self.factory_agent.gom_positions[1:]:
+            self.draw_point(gom, painter)
+
+        # Draw TRs
         p.setWidth(4)
-        p.setColor(self.pen_color)
+        p.setColor(self.tr_color)
         painter.setPen(p)
 
-        # Draw test agents
-        for pt in self.agents:
-            painter.drawPoint(pt)
+        for tr in self.factory_agent.tr_positions[1:]:
+            self.draw_point(tr, painter)
 
         painter.end()
         self.update()
+
+    def draw_point(self, point, painter) -> None:
+        """
+        Draws point with painter. (0, 0) is centered.
+        """
+
+        if point is not None:
+            x = round(self.width() / 2 + point.x)
+            y = round(self.height() / 2 - point.y)
+            painter.drawPoint(x, y)
 
 
 class MainWindow(QMainWindow):
@@ -136,12 +172,12 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__(*args, **kwargs)
 
         # Agent
-        self.factory_agent = FactoryAgent("factory@localhost", "password")
+        self.factory_agent = FactoryAgent(f"factory@{settings.HOST}", "password")
 
         # Layout
         layout = QVBoxLayout()
 
-        self.canvas = Canvas()
+        self.canvas = Canvas(self.factory_agent)
         b = QPushButton("Start worker")
         b.pressed.connect(self.start_agent_worker)
 
@@ -165,12 +201,12 @@ class MainWindow(QMainWindow):
         self.timer.timeout.connect(self.recurring_timer)
         self.timer.start()
 
-    def progress_fn(self, n):
+    def progress_fn(self, n) -> None:
         print(f"[progress_fn] {n}")
 
-    def execute_agent(self, progress_callback):
+    def execute_agent(self, update_callback):
         agent = self.factory_agent
-        agent.set_progress_callback(progress_callback)
+        agent.set_update_callback(update_callback)
         future = agent.start()
         future.result()
 
@@ -188,13 +224,13 @@ class MainWindow(QMainWindow):
 
         return "Successful result"
 
-    def process_result(self, result):
+    def process_result(self, result) -> None:
         print(f"Worker result:\n{result}")
 
-    def thread_complete(self):
+    def thread_complete(self) -> None:
         print("THREAD COMPLETE!")
 
-    def start_agent_worker(self):
+    def start_agent_worker(self) -> None:
         """
         Binds defined signals, then starts factory agent in separate thread.
         """
@@ -207,7 +243,7 @@ class MainWindow(QMainWindow):
         # Execute
         self.thread_pool.start(worker)
 
-    def recurring_timer(self):
+    def recurring_timer(self) -> None:
         self.counter += 0.05
         self.canvas.agents[0].setX(round(cos(self.counter) * 100) + 120)
         self.canvas.agents[0].setY(round(sin(self.counter) * 100) + 120)

@@ -22,3 +22,9 @@ class GoMOrder:
     order_id: int  # unique
     location: str  # "" - warehouse, "address@host" - socket_id
     operation: Operation
+
+
+@dataclass
+class Point:
+    x: float
+    y: float
