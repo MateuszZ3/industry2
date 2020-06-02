@@ -1,4 +1,5 @@
-from enums import *
+from enums import Operation
+
 
 HOST = "localhost"
 TR_SPEED = 1
