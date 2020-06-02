@@ -1,7 +1,3 @@
-# kolekcja adresów
-# handlery do menadżera
-# wiadomości do gui
-
 import asyncio
 import datetime
 import random
@@ -12,10 +8,10 @@ from spade.message import Message
 from spade.template import Template
 
 import settings
-from manager import Manager
+from agents import GroupOfMachinesAgent, TransportRobotAgent
 from common import Order, Point
 from enums import Operation
-from agents import GroupOfMachinesAgent, TransportRobotAgent
+from manager import Manager
 
 
 class OrderFactory:
@@ -145,7 +141,7 @@ class FactoryAgent(Agent):
         # Behaviours
         start_at = datetime.datetime.now() + datetime.timedelta(seconds=5)
         self.start_behaviour = self.StartAgents()
-        self.order_behav = self.OrderBehav(60.0, start_at)
+        self.order_behav = self.OrderBehav(5.0, start_at)
         self.agr_handler = self.OrderAgreeHandler()
         self.fail_handler = self.OrderFailureHandler()
         self.done_handler = self.OrderDoneHandler()
@@ -174,6 +170,8 @@ class FactoryAgent(Agent):
         done_temp.sender = self.manager_jid
         done_temp.metadata = {"performative": "inform"}
         self.add_behaviour(self.done_handler, done_temp)
+
+        self.add_behaviour(self.StartAgents())
 
     def set_update_callback(self, callback) -> None:
         """
