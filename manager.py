@@ -40,6 +40,7 @@ class Manager(Agent):
             while not self.agent.orders:
                 await sleep(0.1)
             order: Order = heappop(self.agent.orders)
+            print(order)
             last = self.agent.last_operation_location[
                 order.order_id] if order.order_id in self.agent.last_operation_location else ''
             gorder = GoMOrder(order.priority, order.order_id, last, order.operations[order.current_operation])
@@ -86,7 +87,7 @@ class Manager(Agent):
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
             oid = msg.thread
-            order: Order = self.agent.active_orders[oid]
+            order: Order = self.agent.active_orders[int(oid)]
             order.current_operation += 1
             self.agent.last_operation_location[oid] = msg.sender
             heappush(self.agent.orders, order)

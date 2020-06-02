@@ -70,10 +70,11 @@ class GroupOfMachinesAgent(Agent):
     async def handle_tr_inform(self, msg, recv):
         assert msg is not None
         self.add_behaviour(self.WorkBehaviour())
+        reply = self.msg_order.make_reply()
+        reply.set_metadata('performative', 'inform')
+        await recv.send(reply)
 
     async def handle_manager_request(self, msg, recv):
-        print('dupa'*8)
-        print(f'recived message gom: {msg}')
         reply = msg.make_reply()
         order = GoMOrder.from_json(msg.body)
         accepted = False
@@ -176,13 +177,12 @@ class TransportRobotAgent(Agent):
     def get_order(self):
         destination = self.factory_map[self.order.location]
         move_behaviour = self.move(destination)
-        self.add_after_behaviour(move_behaviour, self.loaded_order)
+        self.add_after_behaviour(move_behaviour, self.load_order)
 
     async def handle_tr_request(self, msg, recv):
         assert self.msg_order is None
         assert self.order is None
         self.msg_order = msg
-        print(msg.body)
         self.order = GoMOrder.from_json(msg.body)
         reply = self.msg_order.make_reply()
         reply.set_metadata('performative', 'agree')
