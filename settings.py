@@ -1,7 +1,15 @@
 from enums import Operation
 
-
+# manager/factory jid: {*}@{HOST}
+# tr/gom jid: {*_base}{id}@{HOST}
 HOST = "localhost"
+AGENT_NAMES = {
+    "tr_base": "tr-",
+    "gom_base": "gom-",
+    "manager": "manager",
+    "factory": "factory",
+}
+PASSWORD = "password"
 TR_SPEED = 1
 OP_DURATIONS = {
     Operation.DRILL: 1000,

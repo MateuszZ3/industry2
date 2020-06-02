@@ -57,7 +57,7 @@ class Manager(Agent):
         """Request from factory"""
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
-            order = Order.from_json(msg)
+            order = Order.from_json(msg.body)
             print(order)
             heappush(self.agent.orders, order)
             reply = Message(self.agent.factory_aid)
@@ -95,13 +95,13 @@ class Manager(Agent):
             report.thread = oid
             await self.send(report)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, factory_aid: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.goms = []  # todo tu dodać GoMy
         self.orders = []
         self.active_orders = {}
         self.last_operation_location = {}
-        self.factory_aid = 'todo'  # todo aid fabryki
+        self.factory_aid = factory_aid
         self.main_loop = self.MainLoop()
         self.req_handler = self.OrderRequestHandler()
         self.ref_handler = self.OrderRefuseHandler()
@@ -127,7 +127,7 @@ class Manager(Agent):
 
 
 if __name__ == "__main__":
-    manager = Manager("agent@localhost", "pswd")
+    manager = Manager(f"{settings.AGENT_NAMES['manager']}@{settings.HOST}", settings.PASSWORD)
     future = manager.start()
     future.result()  # Wait until the start method is finished
 

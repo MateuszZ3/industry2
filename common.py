@@ -7,7 +7,7 @@ from enums import Operation
 
 
 @dataclass_json
-@dataclass
+@dataclass(order=True)
 class Order:
     priority: int  # N, 0 max
     order_id: int  # unique
