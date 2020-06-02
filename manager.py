@@ -1,4 +1,4 @@
-import asyncio
+from asyncio import sleep
 import random
 import time
 from heapq import heappop, heappush
@@ -33,7 +33,7 @@ class Manager(Agent):
 
         async def run(self):
             if not self.agent.goms:
-                await asyncio.sleep(MANAGER_LOOP_TIMEOUT)
+                await sleep(MANAGER_LOOP_TIMEOUT)
                 return
             gom: GoMInfo = random.choice(self.agent.goms)
             order: Order = heappop(self.agent.orders)
