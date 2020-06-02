@@ -31,9 +31,8 @@ class RecvBehaviour(CyclicBehaviour):
 
 
 class GroupOfMachinesAgent(Agent):
-    def __init__(self, socket_id, manager_address, tr_address, machines, *args, **kwargs):
+    def __init__(self, manager_address, tr_address, machines, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.socket_id = socket_id
         self.manager_address = manager_address
         self.tr_address = tr_address
         self.machines = defaultdict(list)
@@ -71,6 +70,9 @@ class GroupOfMachinesAgent(Agent):
     async def handle_tr_inform(self, msg, recv):
         assert msg is not None
         self.add_behaviour(self.WorkBehaviour())
+        reply = self.msg_order.make_reply()
+        reply.set_metadata('performative', 'inform')
+        await recv.send(reply)
 
     async def handle_manager_request(self, msg, recv):
         reply = msg.make_reply()
@@ -86,11 +88,12 @@ class GroupOfMachinesAgent(Agent):
             reply.set_metadata('performative', 'refuse')
         await recv.send(reply)
         if accepted:
-            if self.socket_id == order.location:
+            if str(self.jid) == order.location:
                 self.add_behaviour(self.WorkBehaviour())
             else:
                 msg_tr = Message(to=self.tr_address)
                 msg_tr.set_metadata('performative', 'request')
+                msg_tr.body = msg.body
                 await recv.send(msg_tr)
 
     async def setup(self):
@@ -109,9 +112,8 @@ class GroupOfMachinesAgent(Agent):
 
 
 class TransportRobotAgent(Agent):
-    def __init__(self, socket_id, position, gom_address, factory_map, *args, **kwargs):
+    def __init__(self, position, gom_address, factory_map, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.socket_id = socket_id
         self.position = position
         self.gom_address = gom_address
         self.factory_map = factory_map
@@ -175,7 +177,7 @@ class TransportRobotAgent(Agent):
     def get_order(self):
         destination = self.factory_map[self.order.location]
         move_behaviour = self.move(destination)
-        self.add_after_behaviour(move_behaviour, self.loaded_order)
+        self.add_after_behaviour(move_behaviour, self.load_order)
 
     async def handle_tr_request(self, msg, recv):
         assert self.msg_order is None

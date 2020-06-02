@@ -1,7 +1,3 @@
-# kolekcja adresów
-# handlery do menadżera
-# wiadomości do gui
-
 import asyncio
 import datetime
 import random
@@ -12,8 +8,10 @@ from spade.message import Message
 from spade.template import Template
 
 import settings
+from agents import GroupOfMachinesAgent, TransportRobotAgent
 from common import Order, Point
 from enums import Operation
+from manager import Manager
 
 
 class OrderFactory:
@@ -46,8 +44,25 @@ class FactoryAgent(Agent):
         """
 
         async def run(self):
-            # await a.start(auto_register=False)
-            pass
+            gom_infos = []
+            for i, (gom_jid, tr_jid) in enumerate(self.agent.jids, start=1):
+                gom_operations = list(Operation)
+                gom_infos.append((gom_jid, gom_operations))
+                gom = GroupOfMachinesAgent(manager_address=self.agent.manager_jid, tr_address=tr_jid,
+                                           machines=gom_operations, jid=gom_jid, password=settings.PASSWORD)
+                await gom.start()
+                print(f'gom started {gom_jid=}')
+                await asyncio.sleep(settings.AGENT_CREATION_SLEEP)
+                tr = TransportRobotAgent(position=self.agent.tr_positions[i], gom_address=gom_jid,
+                                         factory_map=self.agent.factory_map, jid=tr_jid, password=settings.PASSWORD)
+                await tr.start()
+                print(f'tr started {tr_jid=}')
+                await asyncio.sleep(settings.AGENT_CREATION_SLEEP)
+
+            manager = Manager(factory_jid=str(self.agent.jid), gom_infos=gom_infos, jid=self.agent.manager_jid,
+                              password=settings.PASSWORD)
+            await manager.start()
+            print('manger')
 
     class OrderBehav(PeriodicBehaviour):
         """
@@ -55,21 +70,20 @@ class FactoryAgent(Agent):
         """
 
         async def run(self):
+            await self.agent.start_behaviour.join()
+            print('after start')
             # print(f"Running {type(self).__name__}...")
 
             order = self.agent.order_factory.create()
             self.agent.orders[order.order_id] = order
 
             # Send request
-            msg = Message(to=f"manager@{settings.HOST}")
+            msg = Message(to=self.agent.manager_jid)
             msg.set_metadata("performative", "request")
-            msg.body = f"{order}"  # Set the message content
+            msg.body = order.to_json()  # Set the message content
 
             await self.send(msg)
             print(f"Message sent!\n{msg}")
-
-            # set exit_code for the behaviour
-            self.exit_code = "Job Finished!"
 
             self.agent.update_callback.emit(order.order_id)  # tmp: Emit progress signal with int
 
@@ -113,24 +127,21 @@ class FactoryAgent(Agent):
 
         self.update_callback = None
 
-        # manager/factory address: {*}@{HOST}
-        # tr/gom address: {*_base}{id}@{HOST}
-        self.base_addresses = {
-            "tr_base": "tr-",
-            "gom_base": "gom-",
-            "manager": "manager",
-            "factory": "factory",
-        }
-        self.manager_aid = f"{self.base_addresses['manager']}@{settings.HOST}"
+        self.manager_jid = f"{settings.AGENT_NAMES['manager']}@{settings.HOST}"
 
         # GoM IDs start with 1, so that 0 can be used as set-aside's ID
         self.gom_count = 12
         self.gom_positions = [Point(x=-128.0, y=0.0)]  # [0] is set-aside position
-        self.tr_positions = [Point(x=0.0, y=0.0)]  # [0] is a placeholder
-        self.create_positions()
+        self.tr_positions = [None]  # [0] is a placeholder
+        self.factory_map = {
+            '' : self.gom_positions[0]
+        }
+        self.jids = self.create()
 
         # Behaviours
-        self.order_behav = self.OrderBehav(10.0)
+        start_at = datetime.datetime.now() + datetime.timedelta(seconds=5)
+        self.start_behaviour = self.StartAgents()
+        self.order_behav = self.OrderBehav(5.0, start_at)
         self.agr_handler = self.OrderAgreeHandler()
         self.fail_handler = self.OrderFailureHandler()
         self.done_handler = self.OrderDoneHandler()
@@ -141,22 +152,26 @@ class FactoryAgent(Agent):
             raise Exception("update_callback not set")
 
         # Behaviours
+        self.add_behaviour(self.start_behaviour)
+
         self.add_behaviour(self.order_behav)
 
         agr_temp = Template()
-        agr_temp.sender = self.manager_aid
-        agr_temp.metadata = {"performative": "inform"}
+        agr_temp.sender = self.manager_jid
+        agr_temp.metadata = {"performative": "agree"}
         self.add_behaviour(self.agr_handler, agr_temp)
 
         fail_temp = Template()
-        fail_temp.sender = self.manager_aid
+        fail_temp.sender = self.manager_jid
         fail_temp.metadata = {"performative": "failure"}
         self.add_behaviour(self.fail_handler, fail_temp)
 
         done_temp = Template()
-        done_temp.sender = self.manager_aid
+        done_temp.sender = self.manager_jid
         done_temp.metadata = {"performative": "inform"}
         self.add_behaviour(self.done_handler, done_temp)
+
+        self.add_behaviour(self.StartAgents())
 
     def set_update_callback(self, callback) -> None:
         """
@@ -165,9 +180,10 @@ class FactoryAgent(Agent):
         """
         self.update_callback = callback
 
-    def create_positions(self):
+    def create(self):
         per_col = 5
         spray_diameter = 10
+        jids = []
         for i in range(self.gom_count):
             y = (i % per_col) * 48 - 96
             x = int(i / per_col) * 64 - 32
@@ -175,3 +191,8 @@ class FactoryAgent(Agent):
             yo = random.gauss(0, spray_diameter)
             self.gom_positions.append(Point(x=x, y=y))
             self.tr_positions.append(Point(x=x + xo, y=y + yo))
+            gom_jid = f"{settings.AGENT_NAMES['gom_base']}{i + 1}@{settings.HOST}"
+            tr_jid = f"{settings.AGENT_NAMES['tr_base']}{i + 1}@{settings.HOST}"
+            jids.append((gom_jid, tr_jid))
+            self.factory_map[gom_jid] = Point(x=x, y=y)
+        return jids

@@ -7,12 +7,15 @@ from enums import Operation
 
 
 @dataclass_json
-@dataclass
+@dataclass(order=True)
 class Order:
     priority: int  # N, 0 max
     order_id: int  # unique
     operations: List[Operation]
     current_operation: int  # index
+
+    def is_done(self):
+        return len(self.operations) <= self.current_operation
 
 
 @dataclass_json
