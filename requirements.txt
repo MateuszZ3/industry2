@@ -1,2 +1,6 @@
 spade>=3.1.4
+<<<<<<< HEAD
 pyqt5>=5.14.2
+=======
+dataclasses-json>=0.4.5
+>>>>>>> feature/gom
