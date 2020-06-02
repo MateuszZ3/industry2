@@ -1,14 +1,17 @@
 import random
 import time
+from asyncio import sleep
+from dataclasses import dataclass
 from heapq import heappop, heappush
+from typing import List
 
 from spade.agent import Agent
 from spade.behaviour import CyclicBehaviour
 from spade.message import Message
 from spade.template import Template
 
-from common import *
-from settings import *
+import settings
+from common import GoMOrder, Order
 
 
 @dataclass
@@ -32,57 +35,59 @@ class Manager(Agent):
 
         async def run(self):
             if not self.agent.goms:
+                await sleep(settings.MANAGER_LOOP_TIMEOUT)
                 return
-            gom: GoMInfo = random.choice(self.agent.goms)  # todo jak wybieramy?
+            gom: GoMInfo = random.choice(self.agent.goms)
             order: Order = heappop(self.agent.orders)
+            last = self.agent.last_operation_location[
+                order.order_id] if order.order_id in self.agent.last_operation_location else '0'
+            gorder = GoMOrder(order.priority, order.order_id, last, order.operations[order.current_operation])
             self.agent.active_orders[order.id] = order
             msg = Message(gom.aid)
             msg.set_metadata("performative", "request")
-            msg.thread = order.id
-            msg.body = order.operations[order.status]
+            msg.body = gorder.to_json()
+            msg.thread = order.order_id
             await self.send(msg)
+            return
 
         async def on_end(self):
             print(f"{self.agent} finished main loop with exit code {self.exit_code}.")
 
-
     class OrderRequestHandler(CyclicBehaviour):
         """Request from factory"""
-        async def run(self):  # todo cyc czy oneshot?
-            msg = await self.receive(timeout=RECEIVE_TIMEOUT)
-            heappush(self.agent.orders, (1, msg))
+        async def run(self):
+            msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
+            order = Order.from_json(msg)
+            print(order)
+            heappush(self.agent.orders, order)
             reply = Message(self.agent.factory_aid)
             reply.set_metadata("performative", "agree")
             await self.send(reply)
 
-
     class OrderRefuseHandler(CyclicBehaviour):
         """Refuse from GoM"""
         async def run(self):
-            msg = await self.receive(timeout=RECEIVE_TIMEOUT)
+            msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
             oid = msg.thread
             order: Order = self.agent.active_orders[oid]
             heappush(self.agent.orders, order)
             self.agent.active_orders[oid] = None
 
-
     class OrderAgreeHandler(CyclicBehaviour):
         """Agree from GoM"""
         async def run(self):
-            msg = await self.receive(timeout=RECEIVE_TIMEOUT)
-            print('agreement received for order ' + msg.thread)
+            msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
+            print('agree received for order ' + msg.thread)
             return
-            oid = msg.thread
-            order: Order = self.agent.active_orders[oid]
-
 
     class OrderDoneHandler(CyclicBehaviour):
         """Inform from GoM"""
         async def run(self):
-            msg = await self.receive(timeout=RECEIVE_TIMEOUT)
+            msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
             oid = msg.thread
             order: Order = self.agent.active_orders[oid]
-            order.status += 1
+            order.current_operation += 1
+            self.agent.last_operation_location[oid] = msg.sender
             heappush(self.agent.orders, order)
             self.agent.active_orders[oid] = None
             report = Message(self.agent.factory_aid)
@@ -90,13 +95,13 @@ class Manager(Agent):
             report.thread = oid
             await self.send(report)
 
-
-    def __init__(self, jid, password, verify_security=False):
-        super().__init__(jid, password, verify_security=False)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.goms = []  # todo tu dodać GoMy
         self.orders = []
         self.active_orders = {}
-        self.factory_aid = ''  # todo aid fabryki
+        self.last_operation_location = {}
+        self.factory_aid = 'todo'  # todo aid fabryki
         self.main_loop = self.MainLoop()
         self.req_handler = self.OrderRequestHandler()
         self.ref_handler = self.OrderRefuseHandler()
