@@ -1,13 +1,18 @@
+# kolekcja adresów
+# lista współrzędnych
+# handlery do menadżera
+# wiadomości do gui
+
 import asyncio
 import datetime
-import json
 import random
 
 from spade import quit_spade
 from spade.agent import Agent
-from spade.behaviour import PeriodicBehaviour, CyclicBehaviour
+from spade.behaviour import PeriodicBehaviour, OneShotBehaviour
 from spade.message import Message
 
+import settings
 from common import Order
 from enums import Operation
 
@@ -36,6 +41,13 @@ class OrderFactory:
 
 
 class FactoryAgent(Agent):
+    class StartAgents(OneShotBehaviour):
+        """
+        Starts all other agents.
+        """
+        async def run(self):
+            # await a.start(auto_register=False)
+            pass
 
     class OrderBehav(PeriodicBehaviour):
         """
@@ -48,14 +60,11 @@ class FactoryAgent(Agent):
         async def run(self):
             # print(f"Running {type(self).__name__}...")
 
-            # Czy to jest dobre podejście?
             order = self.agent.order_factory.create()
 
             # Send request
-            msg = Message(to="manager@localhost")
+            msg = Message(to=f"manager@{settings.HOST}")
             msg.set_metadata("performative", "request")
-            # msg.set_metadata("ontology", "myOntology")  # Set the ontology of the message content
-            # msg.set_metadata("language", "OWL-S")  # Set the language of the message content
             msg.body = f"{order}"  # Set the message content
 
             await self.send(msg)
@@ -76,6 +85,15 @@ class FactoryAgent(Agent):
 
         self.progress_callback = None
 
+        # manager/factory address: {*}@{HOST}
+        # tr/gom address: {*_base}{id}@{HOST}
+        self.base_addresses = {
+            "tr_base": "tr-",
+            "gom_base": "gom-",
+            "manager": "manager",
+            "factory": "factory",
+        }
+
     async def setup(self):
         print(f"TickerAgent started at {datetime.datetime.now().time()}")
         if self.progress_callback is None:
@@ -86,24 +104,3 @@ class FactoryAgent(Agent):
 
     def set_progress_callback(self, callback):
         self.progress_callback = callback
-
-# def main():
-#     factory = FactoryAgent("agent@localhost", "password")
-#     future = factory.start()
-#     future.result()
-#
-#     while not factory.ticker_behav.is_killed():
-#         try:
-#             time.sleep(1)
-#         except KeyboardInterrupt:
-#             factory.stop()
-#             break
-#
-#     print("Agent finished")
-#     future = factory.stop()
-#     future.result()
-#     quit_spade()
-#
-#
-# if __name__ == "__main__":
-#     main()

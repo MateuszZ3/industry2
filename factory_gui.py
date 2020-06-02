@@ -10,6 +10,7 @@ from random import randint
 
 from factory_agent import FactoryAgent
 from spade import quit_spade
+import settings
 
 COLORS = [
     # 17 undertones https://lospec.com/palette-list/17undertones
@@ -136,7 +137,7 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__(*args, **kwargs)
 
         # Agent
-        self.factory_agent = FactoryAgent("factory@localhost", "password")
+        self.factory_agent = FactoryAgent(f"factory@{settings.HOST}", "password")
 
         # Layout
         layout = QVBoxLayout()
