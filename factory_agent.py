@@ -1,5 +1,4 @@
 # kolekcja adresów
-# lista współrzędnych
 # handlery do menadżera
 # wiadomości do gui
 
@@ -13,7 +12,7 @@ from spade.behaviour import PeriodicBehaviour, OneShotBehaviour
 from spade.message import Message
 
 import settings
-from common import Order
+from common import Order, Point
 from enums import Operation
 
 
@@ -45,6 +44,7 @@ class FactoryAgent(Agent):
         """
         Starts all other agents.
         """
+
         async def run(self):
             # await a.start(auto_register=False)
             pass
@@ -73,17 +73,17 @@ class FactoryAgent(Agent):
             # set exit_code for the behaviour
             self.exit_code = "Job Finished!"
 
-            self.agent.progress_callback.emit(order.id)  # tmp: Emit progress signal with int
+            self.agent.update_callback.emit(order.id)  # tmp: Emit progress signal with int
 
     def __init__(self, jid, password, verify_security=False):
         super().__init__(jid, password, verify_security=False)
+        # Orders
         self.unused_id = 1
         self.orders = []
         self.order_factory = OrderFactory()
-
         self.order_behav = None
 
-        self.progress_callback = None
+        self.update_callback = None
 
         # manager/factory address: {*}@{HOST}
         # tr/gom address: {*_base}{id}@{HOST}
@@ -94,13 +94,34 @@ class FactoryAgent(Agent):
             "factory": "factory",
         }
 
+        # GoM IDs start with 1, so that 0 can be used as set-aside's ID
+        self.gom_count = 12
+        self.gom_positions = [Point(x=-128.0, y=0.0)]  # [0] is set-aside position
+        self.tr_positions = [Point(x=0.0, y=0.0)]  # [0] is a placeholder
+        self.create_positions()
+
     async def setup(self):
         print(f"TickerAgent started at {datetime.datetime.now().time()}")
-        if self.progress_callback is None:
-            raise Exception("progress callback not set")
+        if self.update_callback is None:
+            raise Exception("update_callback not set")
 
         self.order_behav = self.OrderBehav()
         self.add_behaviour(self.order_behav)
 
-    def set_progress_callback(self, callback):
-        self.progress_callback = callback
+    def set_update_callback(self, callback) -> None:
+        """
+        Sets callback used for updating GUI.
+        :param callback: callback
+        """
+        self.update_callback = callback
+
+    def create_positions(self):
+        per_col = 5
+        spray_diameter = 10
+        for i in range(self.gom_count):
+            y = (i % per_col) * 48 - 96
+            x = int(i / per_col) * 64 - 32
+            xo = random.gauss(0, spray_diameter)
+            yo = random.gauss(0, spray_diameter)
+            self.gom_positions.append(Point(x=x, y=y))
+            self.tr_positions.append(Point(x=x+xo, y=y+yo))

@@ -16,3 +16,9 @@ class Order:
 class GoMOrder:
     priority: int
     operation: Operation
+
+
+@dataclass
+class Point:
+    x: float
+    y: float
