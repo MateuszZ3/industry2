@@ -1,37 +1,23 @@
-import json
-import sys
 from dataclasses import dataclass
 from typing import List
 
+from dataclasses_json import dataclass_json
 from enums import Operation
 
 
+@dataclass_json
 @dataclass
 class Order:
     priority: int  # N, 0 max
-    id: int
+    order_id: int  # unique
     operations: List[Operation]
-    status: int  # index of current operation
+    current_operation: int  # index
 
 
+@dataclass_json
 @dataclass
 class GoMOrder:
-    priority: int
+    priority: int  # N, 0 max
+    order_id: int  # unique
+    location: int  # 0 - warehouse, positive - socket_id
     operation: Operation
-
-
-def serialize(data, info=''):
-    payload = {}
-    for field in data.__dataclass_fields__.keys():
-        payload[field] = getattr(data, field)
-    return json.dumps({
-        'class': type(data).__name__,
-        'payload': payload,
-        'info': info
-    })
-
-def deserialize(body):
-    data = json.loads(body)
-    current_module = sys.modules[__name__]
-    instance = getattr(current_module, data['class'])(**data['payload'])
-    return instance, data['info']
