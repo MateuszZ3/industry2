@@ -129,6 +129,7 @@ class Canvas(QLabel):
         self.update()
 
     def draw_scene(self) -> None:
+        # TODO remove first position in gom_positions and tr_positions, use factory_map
         self.clear_scene()
         painter = QtGui.QPainter(self.pixmap())
         p = painter.pen()

@@ -15,6 +15,7 @@ import settings
 from manager import Manager
 from common import Order, Point
 from enums import Operation
+from agents import GroupOfMachinesAgent, TransportRobotAgent
 
 
 class OrderFactory:
@@ -47,8 +48,25 @@ class FactoryAgent(Agent):
         """
 
         async def run(self):
-            manager = Manager(str(self.agent.jid), self.agent.manager_jid, settings.PASSWORD)
-            await manager.start(auto_register=False)
+            gom_infos = []
+            for i, (gom_jid, tr_jid) in enumerate(self.agent.jids, start=1):
+                gom_operations = list(Operation)
+                gom_infos.append((gom_jid, gom_operations))
+                gom = GroupOfMachinesAgent(manager_address=self.agent.manager_jid, tr_address=tr_jid,
+                                           machines=gom_operations, jid=gom_jid, password=settings.PASSWORD)
+                await gom.start()
+                print(f'gom started {gom_jid=}')
+                await asyncio.sleep(settings.AGENT_CREATION_SLEEP)
+                tr = TransportRobotAgent(position=self.agent.tr_positions[i], gom_address=gom_jid,
+                                         factory_map=self.agent.factory_map, jid=tr_jid, password=settings.PASSWORD)
+                await tr.start()
+                print(f'tr started {tr_jid=}')
+                await asyncio.sleep(settings.AGENT_CREATION_SLEEP)
+
+            manager = Manager(factory_jid=str(self.agent.jid), gom_infos=gom_infos, jid=self.agent.manager_jid,
+                              password=settings.PASSWORD)
+            await manager.start()
+            print('manger')
 
     class OrderBehav(PeriodicBehaviour):
         """
@@ -56,6 +74,8 @@ class FactoryAgent(Agent):
         """
 
         async def run(self):
+            await self.agent.start_behaviour.join()
+            print('after start')
             # print(f"Running {type(self).__name__}...")
 
             order = self.agent.order_factory.create()
@@ -116,12 +136,16 @@ class FactoryAgent(Agent):
         # GoM IDs start with 1, so that 0 can be used as set-aside's ID
         self.gom_count = 12
         self.gom_positions = [Point(x=-128.0, y=0.0)]  # [0] is set-aside position
-        self.tr_positions = [Point(x=0.0, y=0.0)]  # [0] is a placeholder
-        self.create_positions()
+        self.tr_positions = [None]  # [0] is a placeholder
+        self.factory_map = {
+            '' : self.gom_positions[0]
+        }
+        self.jids = self.create()
 
         # Behaviours
         start_at = datetime.datetime.now() + datetime.timedelta(seconds=5)
-        self.order_behav = self.OrderBehav(10.0, start_at)
+        self.start_behaviour = self.StartAgents()
+        self.order_behav = self.OrderBehav(60.0, start_at)
         self.agr_handler = self.OrderAgreeHandler()
         self.fail_handler = self.OrderFailureHandler()
         self.done_handler = self.OrderDoneHandler()
@@ -132,11 +156,13 @@ class FactoryAgent(Agent):
             raise Exception("update_callback not set")
 
         # Behaviours
+        self.add_behaviour(self.start_behaviour)
+
         self.add_behaviour(self.order_behav)
 
         agr_temp = Template()
         agr_temp.sender = self.manager_jid
-        agr_temp.metadata = {"performative": "inform"}
+        agr_temp.metadata = {"performative": "agree"}
         self.add_behaviour(self.agr_handler, agr_temp)
 
         fail_temp = Template()
@@ -149,8 +175,6 @@ class FactoryAgent(Agent):
         done_temp.metadata = {"performative": "inform"}
         self.add_behaviour(self.done_handler, done_temp)
 
-        self.add_behaviour(self.StartAgents())
-
     def set_update_callback(self, callback) -> None:
         """
         Sets callback used for updating GUI.
@@ -158,9 +182,10 @@ class FactoryAgent(Agent):
         """
         self.update_callback = callback
 
-    def create_positions(self):
+    def create(self):
         per_col = 5
         spray_diameter = 10
+        jids = []
         for i in range(self.gom_count):
             y = (i % per_col) * 48 - 96
             x = int(i / per_col) * 64 - 32
@@ -168,3 +193,8 @@ class FactoryAgent(Agent):
             yo = random.gauss(0, spray_diameter)
             self.gom_positions.append(Point(x=x, y=y))
             self.tr_positions.append(Point(x=x + xo, y=y + yo))
+            gom_jid = f"{settings.AGENT_NAMES['gom_base']}{i + 1}@{settings.HOST}"
+            tr_jid = f"{settings.AGENT_NAMES['tr_base']}{i + 1}@{settings.HOST}"
+            jids.append((gom_jid, tr_jid))
+            self.factory_map[gom_jid] = Point(x=x, y=y)
+        return jids

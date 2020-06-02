@@ -16,14 +16,13 @@ from common import GoMOrder, Order
 
 @dataclass
 class MachineInfo:
-    state: bool
     operation: str
+    state: bool = True
 
 
 @dataclass
 class GoMInfo:
-    aid: str
-    state: bool
+    jid: str
     machines: List[MachineInfo]
 
 
@@ -34,21 +33,23 @@ class Manager(Agent):
             print("Starting main loop . . .")
 
         async def run(self):
-            if not self.agent.goms:
+            if not self.agent.gom_infos:
                 await sleep(settings.MANAGER_LOOP_TIMEOUT)
                 return
-            gom: GoMInfo = random.choice(self.agent.goms)
+            gom: GoMInfo = random.choice(self.agent.gom_infos)
+            while not self.agent.orders:
+                await sleep(0.1)
             order: Order = heappop(self.agent.orders)
             last = self.agent.last_operation_location[
-                order.order_id] if order.order_id in self.agent.last_operation_location else '0'
+                order.order_id] if order.order_id in self.agent.last_operation_location else ''
             gorder = GoMOrder(order.priority, order.order_id, last, order.operations[order.current_operation])
-            self.agent.active_orders[order.id] = order
-            msg = Message(gom.aid)
+            self.agent.active_orders[order.order_id] = order
+            msg = Message(to=gom.jid)
             msg.set_metadata("performative", "request")
             msg.body = gorder.to_json()
-            msg.thread = order.order_id
+            msg.thread = str(order.order_id)
+            print(f'manager send: {msg}')
             await self.send(msg)
-            return
 
         async def on_end(self):
             print(f"{self.agent} finished main loop with exit code {self.exit_code}.")
@@ -60,7 +61,7 @@ class Manager(Agent):
             order = Order.from_json(msg.body)
             print(order)
             heappush(self.agent.orders, order)
-            reply = Message(self.agent.factory_aid)
+            reply = Message(self.agent.factory_jid)
             reply.set_metadata("performative", "agree")
             await self.send(reply)
 
@@ -90,18 +91,20 @@ class Manager(Agent):
             self.agent.last_operation_location[oid] = msg.sender
             heappush(self.agent.orders, order)
             self.agent.active_orders[oid] = None
-            report = Message(self.agent.factory_aid)
+            report = Message(self.agent.factory_jid)
             report.set_metadata("performative", "inform")
             report.thread = oid
             await self.send(report)
 
-    def __init__(self, factory_aid: str, *args, **kwargs):
+    def __init__(self, factory_jid: str, gom_infos, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.goms = []  # todo tu dodać GoMy
+        self.gom_infos = []
+        for gom_jid, operations in gom_infos:
+            self.gom_infos.append(GoMInfo(jid=gom_jid, machines=[MachineInfo(operation=op) for op in operations]))
         self.orders = []
         self.active_orders = {}
         self.last_operation_location = {}
-        self.factory_aid = factory_aid
+        self.factory_jid = factory_jid
         self.main_loop = self.MainLoop()
         self.req_handler = self.OrderRequestHandler()
         self.ref_handler = self.OrderRefuseHandler()
@@ -111,7 +114,7 @@ class Manager(Agent):
     async def setup(self):
         print("Manager starting . . .")
         fac_temp = Template()
-        fac_temp.sender = self.factory_aid
+        fac_temp.sender = self.factory_jid
         fac_temp.metadata = {"performative": "request"}
         self.add_behaviour(self.req_handler, fac_temp)
         ref_temp = Template()

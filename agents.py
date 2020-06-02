@@ -31,9 +31,8 @@ class RecvBehaviour(CyclicBehaviour):
 
 
 class GroupOfMachinesAgent(Agent):
-    def __init__(self, socket_id, manager_address, tr_address, machines, *args, **kwargs):
+    def __init__(self, manager_address, tr_address, machines, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.socket_id = socket_id
         self.manager_address = manager_address
         self.tr_address = tr_address
         self.machines = defaultdict(list)
@@ -73,6 +72,8 @@ class GroupOfMachinesAgent(Agent):
         self.add_behaviour(self.WorkBehaviour())
 
     async def handle_manager_request(self, msg, recv):
+        print('dupa'*8)
+        print(f'recived message gom: {msg}')
         reply = msg.make_reply()
         order = GoMOrder.from_json(msg.body)
         accepted = False
@@ -86,11 +87,12 @@ class GroupOfMachinesAgent(Agent):
             reply.set_metadata('performative', 'refuse')
         await recv.send(reply)
         if accepted:
-            if self.socket_id == order.location:
+            if str(self.jid) == order.location:
                 self.add_behaviour(self.WorkBehaviour())
             else:
                 msg_tr = Message(to=self.tr_address)
                 msg_tr.set_metadata('performative', 'request')
+                msg_tr.body = msg.body
                 await recv.send(msg_tr)
 
     async def setup(self):
@@ -109,9 +111,8 @@ class GroupOfMachinesAgent(Agent):
 
 
 class TransportRobotAgent(Agent):
-    def __init__(self, socket_id, position, gom_address, factory_map, *args, **kwargs):
+    def __init__(self, position, gom_address, factory_map, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.socket_id = socket_id
         self.position = position
         self.gom_address = gom_address
         self.factory_map = factory_map
@@ -181,6 +182,7 @@ class TransportRobotAgent(Agent):
         assert self.msg_order is None
         assert self.order is None
         self.msg_order = msg
+        print(msg.body)
         self.order = GoMOrder.from_json(msg.body)
         reply = self.msg_order.make_reply()
         reply.set_metadata('performative', 'agree')
