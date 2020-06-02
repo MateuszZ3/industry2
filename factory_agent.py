@@ -12,6 +12,7 @@ from spade.message import Message
 from spade.template import Template
 
 import settings
+from manager import Manager
 from common import Order, Point
 from enums import Operation
 
@@ -46,8 +47,8 @@ class FactoryAgent(Agent):
         """
 
         async def run(self):
-            # await a.start(auto_register=False)
-            pass
+            manager = Manager(str(self.agent.jid), self.agent.manager_jid, settings.PASSWORD)
+            await manager.start(auto_register=False)
 
     class OrderBehav(PeriodicBehaviour):
         """
@@ -61,15 +62,12 @@ class FactoryAgent(Agent):
             self.agent.orders[order.order_id] = order
 
             # Send request
-            msg = Message(to=f"manager@{settings.HOST}")
+            msg = Message(to=self.agent.manager_jid)
             msg.set_metadata("performative", "request")
-            msg.body = f"{order}"  # Set the message content
+            msg.body = order.to_json()  # Set the message content
 
             await self.send(msg)
             print(f"Message sent!\n{msg}")
-
-            # set exit_code for the behaviour
-            self.exit_code = "Job Finished!"
 
             self.agent.update_callback.emit(order.order_id)  # tmp: Emit progress signal with int
 
@@ -113,15 +111,7 @@ class FactoryAgent(Agent):
 
         self.update_callback = None
 
-        # manager/factory address: {*}@{HOST}
-        # tr/gom address: {*_base}{id}@{HOST}
-        self.base_addresses = {
-            "tr_base": "tr-",
-            "gom_base": "gom-",
-            "manager": "manager",
-            "factory": "factory",
-        }
-        self.manager_aid = f"{self.base_addresses['manager']}@{settings.HOST}"
+        self.manager_jid = f"{settings.AGENT_NAMES['manager']}@{settings.HOST}"
 
         # GoM IDs start with 1, so that 0 can be used as set-aside's ID
         self.gom_count = 12
@@ -130,7 +120,8 @@ class FactoryAgent(Agent):
         self.create_positions()
 
         # Behaviours
-        self.order_behav = self.OrderBehav(10.0)
+        start_at = datetime.datetime.now() + datetime.timedelta(seconds=5)
+        self.order_behav = self.OrderBehav(10.0, start_at)
         self.agr_handler = self.OrderAgreeHandler()
         self.fail_handler = self.OrderFailureHandler()
         self.done_handler = self.OrderDoneHandler()
@@ -144,19 +135,21 @@ class FactoryAgent(Agent):
         self.add_behaviour(self.order_behav)
 
         agr_temp = Template()
-        agr_temp.sender = self.manager_aid
+        agr_temp.sender = self.manager_jid
         agr_temp.metadata = {"performative": "inform"}
         self.add_behaviour(self.agr_handler, agr_temp)
 
         fail_temp = Template()
-        fail_temp.sender = self.manager_aid
+        fail_temp.sender = self.manager_jid
         fail_temp.metadata = {"performative": "failure"}
         self.add_behaviour(self.fail_handler, fail_temp)
 
         done_temp = Template()
-        done_temp.sender = self.manager_aid
+        done_temp.sender = self.manager_jid
         done_temp.metadata = {"performative": "inform"}
         self.add_behaviour(self.done_handler, done_temp)
+
+        self.add_behaviour(self.StartAgents())
 
     def set_update_callback(self, callback) -> None:
         """

@@ -172,7 +172,7 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__(*args, **kwargs)
 
         # Agent
-        self.factory_agent = FactoryAgent(f"factory@{settings.HOST}", "password")
+        self.factory_agent = FactoryAgent(f"{settings.AGENT_NAMES['factory']}@{settings.HOST}", settings.PASSWORD)
 
         # Layout
         layout = QVBoxLayout()
