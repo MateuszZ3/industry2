@@ -156,7 +156,7 @@ class TransportRobotAgent(Agent):
         assert self.msg_order is not None
         assert self.order is not None
         self.loaded_order = self.order
-        destination = self.factory_map[self.socket_id]
+        destination = self.factory_map[self.gom_address]
         move_behaviour = self.move(destination)
         self.add_after_behaviour(move_behaviour, self.deliver_order)
 
