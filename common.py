@@ -19,5 +19,5 @@ class Order:
 class GoMOrder:
     priority: int  # N, 0 max
     order_id: int  # unique
-    location: int  # 0 - warehouse, positive - socket_id
+    location: str  # 0 - warehouse, positive - socket_id
     operation: Operation
