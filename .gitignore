@@ -131,7 +131,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-<<<<<<< HEAD
 # pytype static type analyzer
 .pytype/
 
@@ -140,7 +139,4 @@ cython_debug/
 
 # Editor
 .idea/
-=======
 .vscode/
-
->>>>>>> feature/gom

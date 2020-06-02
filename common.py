@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import List
 
 from dataclasses_json import dataclass_json
+
 from enums import Operation
 
 
@@ -19,5 +20,11 @@ class Order:
 class GoMOrder:
     priority: int  # N, 0 max
     order_id: int  # unique
-    location: str  # 0 - warehouse, positive - socket_id
+    location: str  # "" - warehouse, "address@host" - socket_id
     operation: Operation
+
+
+@dataclass
+class Point:
+    x: float
+    y: float
