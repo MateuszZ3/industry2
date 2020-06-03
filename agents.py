@@ -324,7 +324,7 @@ class Manager(Agent):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
             oid = msg.thread
             active_order: ActiveOrder = self.agent.active_orders[oid]
-            active_order.advance(msg.sender)
+            active_order.advance(str(msg.sender))
             if not active_order.order.is_done():
                 heappush(self.agent.orders, active_order.order)
             else:
