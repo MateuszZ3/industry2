@@ -31,6 +31,10 @@ class GoMInfo:
 
 
 class RecvBehaviour(CyclicBehaviour):
+    """
+    Base receive handler behaviour.
+    :param handler: Handler run when a message is received.
+    """
     def __init__(self, handler):
         super().__init__()
         self.handler = handler
@@ -72,24 +76,28 @@ class FactoryAgent(Agent):
 
         async def run(self):
             gom_infos = []
+
             for i, (gom_jid, tr_jid) in enumerate(self.agent.jids, start=1):
+                # Create and start GoM agent
                 gom_operations = list(Operation)
                 gom_infos.append((gom_jid, gom_operations))
                 gom = GroupOfMachinesAgent(manager_address=self.agent.manager_jid, tr_address=tr_jid,
                                            machines=gom_operations, jid=gom_jid, password=settings.PASSWORD)
                 await gom.start()
-                print(f'gom started {gom_jid=}')
-                await asyncio.sleep(settings.AGENT_CREATION_SLEEP)
+                print(f'gom started gom_jid={gom_jid}')
+                await asyncio.sleep(settings.AGENT_CREATION_SLEEP)  # Wait around 100ms for registration to complete
+
+                # Create and start TR agent
                 tr = TransportRobotAgent(position=self.agent.tr_positions[i], gom_address=gom_jid,
                                          factory_map=self.agent.factory_map, jid=tr_jid, password=settings.PASSWORD)
                 await tr.start()
-                print(f'tr started {tr_jid=}')
-                await asyncio.sleep(settings.AGENT_CREATION_SLEEP)
+                print(f'tr started tr_jid={tr_jid}')
+                await asyncio.sleep(settings.AGENT_CREATION_SLEEP)  # Wait around 100ms for registration to complete
 
+            # Create and start Manager agent
             manager = Manager(factory_jid=str(self.agent.jid), gom_infos=gom_infos, jid=self.agent.manager_jid,
                               password=settings.PASSWORD)
             await manager.start()
-            print('manger')
 
     class OrderBehav(PeriodicBehaviour):
         """
@@ -98,7 +106,6 @@ class FactoryAgent(Agent):
 
         async def run(self):
             await self.agent.start_behaviour.join()
-            print('after start')
             # print(f"Running {type(self).__name__}...")
 
             order = self.agent.order_factory.create()
@@ -116,7 +123,7 @@ class FactoryAgent(Agent):
 
     class OrderAgreeHandler(CyclicBehaviour):
         """
-        On `agree` from `Manager`.
+        On `agree` message from `Manager`.
         """
 
         async def run(self):
@@ -126,7 +133,7 @@ class FactoryAgent(Agent):
 
     class OrderFailureHandler(CyclicBehaviour):
         """
-        On `failure` from `Manager`.
+        On `failure` message from `Manager`.
         """
 
         async def run(self):
@@ -136,7 +143,7 @@ class FactoryAgent(Agent):
 
     class OrderDoneHandler(CyclicBehaviour):
         """
-        On `inform` from `Manager`.
+        On `inform` message from `Manager`.
         """
 
         async def run(self):
@@ -147,23 +154,25 @@ class FactoryAgent(Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Orders
-        self.unused_id = 1
+        self.unused_id = 1  # Currently unused Order ID
         self.orders = {}
         self.order_factory = OrderFactory()
         self.order_behav = None
 
-        self.update_callback = None
-
-        self.manager_jid = f"{settings.AGENT_NAMES['manager']}@{settings.HOST}"
+        self.update_callback = None  # Callback used for updating GUI.
 
         # GoM IDs start with 1, so that 0 can be used as set-aside's ID
         self.gom_count = 12
         self.gom_positions = [Point(x=-128.0, y=0.0)]  # [0] is set-aside position
         self.tr_positions = [None]  # [0] is a placeholder
+        # Maps JID to Point
         self.factory_map = {
-            '' : self.gom_positions[0]
+            '': self.gom_positions[0]
         }
-        self.jids = self.create()
+
+        # JIDs
+        self.manager_jid = f"{settings.AGENT_NAMES['manager']}@{settings.HOST}"
+        self.jids = self.prepare()
 
         # Behaviours
         start_at = datetime.datetime.now() + datetime.timedelta(seconds=5)
@@ -207,31 +216,43 @@ class FactoryAgent(Agent):
         """
         self.update_callback = callback
 
-    def create(self):
+    def prepare(self):
+        """
+        Generates positions and JIDs for GoMs and TRs
+        :return:
+        """
         per_col = 5
         spray_diameter = 10
         jids = []
         for i in range(self.gom_count):
+            # Create GoM and TR positions
             y = (i % per_col) * 48 - 96
             x = int(i / per_col) * 64 - 32
             xo = random.gauss(0, spray_diameter)
             yo = random.gauss(0, spray_diameter)
             self.gom_positions.append(Point(x=x, y=y))
             self.tr_positions.append(Point(x=x + xo, y=y + yo))
+
+            # Create JIDs
             gom_jid = f"{settings.AGENT_NAMES['gom_base']}{i + 1}@{settings.HOST}"
             tr_jid = f"{settings.AGENT_NAMES['tr_base']}{i + 1}@{settings.HOST}"
             jids.append((gom_jid, tr_jid))
             self.factory_map[gom_jid] = Point(x=x, y=y)
+
         return jids
 
 
 class Manager(Agent):
     class MainLoop(CyclicBehaviour):
-        """Main agent loop"""
+        """
+        Main agent loop.
+        """
+
         async def on_start(self):
             print("Starting main loop . . .")
 
         async def run(self):
+            #
             if not self.agent.gom_infos:
                 await sleep(settings.MANAGER_LOOP_TIMEOUT)
                 return
@@ -256,6 +277,7 @@ class Manager(Agent):
 
     class OrderRequestHandler(CyclicBehaviour):
         """Request from factory"""
+
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
             order = Order.from_json(msg.body)
@@ -267,6 +289,7 @@ class Manager(Agent):
 
     class OrderRefuseHandler(CyclicBehaviour):
         """Refuse from GoM"""
+
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
             oid = int(msg.thread)
@@ -276,6 +299,7 @@ class Manager(Agent):
 
     class OrderAgreeHandler(CyclicBehaviour):
         """Agree from GoM"""
+
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
             print('agree received for order ' + msg.thread)
@@ -283,6 +307,7 @@ class Manager(Agent):
 
     class OrderDoneHandler(CyclicBehaviour):
         """Inform from GoM"""
+
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
             oid = msg.thread
