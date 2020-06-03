@@ -33,6 +33,7 @@ class GoMInfo:
 class RecvBehaviour(CyclicBehaviour):
     """
     Base receive handler behaviour.
+
     :param handler: Handler run when a message is received.
     """
     def __init__(self, handler):
@@ -212,6 +213,7 @@ class FactoryAgent(Agent):
     def set_update_callback(self, callback) -> None:
         """
         Sets callback used for updating GUI.
+
         :param callback: callback
         """
         self.update_callback = callback
@@ -219,6 +221,7 @@ class FactoryAgent(Agent):
     def prepare(self):
         """
         Generates positions and JIDs for GoMs and TRs
+
         :return:
         """
         per_col = 5
@@ -362,28 +365,39 @@ class GroupOfMachinesAgent(Agent):
         super().__init__(*args, **kwargs)
         self.manager_address = manager_address
         self.tr_address = tr_address
-        self.machines = defaultdict(list)
+        self.machines = defaultdict(list)  # TODO: Co to jest?
         for operation in machines:
             self.machines[operation].append(
                 Machine(operation=operation, working=True))
-        self.order = None
-        self.msg_order = None
+        self.order = None  # TODO: Co to jest?
+        self.msg_order = None  # TODO: Co to jest?
 
     class WorkBehaviour(OneShotBehaviour):
+        """
+        Perform work on current order. TODO: Na pewno?
+        """
         async def run(self):
             assert self.agent.order is not None
             work_duration = settings.OP_DURATIONS[self.agent.order.operation]
             await asyncio.sleep(work_duration)
 
+            # Reply to Manager with `inform`
             assert self.agent.msg_order is not None
             reply = self.agent.msg_order.make_reply()
             reply.set_metadata('performative', 'inform')
             await self.send(reply)
 
+            # Set no active order
             self.agent.order = None
             self.agent.msg_order = None
 
     def can_accept_order(self, order):
+        """
+        TODO: docstring
+
+        :param order:
+        :return:
+        """
         if order.operation not in self.machines:
             return False
         return all([
@@ -392,9 +406,17 @@ class GroupOfMachinesAgent(Agent):
         ])
 
     async def handle_tr_agree(self, msg, recv):
+        """
+        On `agree` message from `TR`.
+        `agree` stands for TODO: Co znaczy agree w tym wypadku?
+        """
         assert msg is not None
 
     async def handle_tr_inform(self, msg, recv):
+        """
+        On `inform` message from `TR`
+        TODO: Co znaczy inform w tym wypadku?
+        """
         assert msg is not None
         self.add_behaviour(self.WorkBehaviour())
         reply = self.msg_order.make_reply()
@@ -402,6 +424,11 @@ class GroupOfMachinesAgent(Agent):
         await recv.send(reply)
 
     async def handle_manager_request(self, msg, recv):
+        """
+        On `request` message from `Manager`
+
+        TODO: Co znaczy request w tym wypadku?
+        """
         reply = msg.make_reply()
         order = GoMOrder.from_json(msg.body)
         accepted = False
@@ -449,9 +476,12 @@ class TransportRobotAgent(Agent):
         self.loaded_order = None
 
     class MoveBehaviour(PeriodicBehaviour):
+        """
+        Moves agent.
+        """
         def __init__(self, destination, *args, **kwargs):
             super().__init__(*args, **kwargs)
-            self.destination = destination
+            self.destination = destination  #
             self.counter = 0
 
         async def run(self):
@@ -461,6 +491,9 @@ class TransportRobotAgent(Agent):
             self.counter += 1
 
     class AfterBehaviour(OneShotBehaviour):
+        """
+        TODO: docstring
+        """
         def __init__(self, behaviour, after_behaviour_fun):
             super().__init__()
             self.behaviour = behaviour
@@ -471,16 +504,25 @@ class TransportRobotAgent(Agent):
             await self.after_behaviour_fun(self)
 
     def move(self, destination):
+        """
+        TODO: Matulu kochana, co tu się dzieje?
+        """
         move_behaviour = self.MoveBehaviour(destination, period=0.1)
         self.add_behaviour(move_behaviour)
         return move_behaviour
 
     def add_after_behaviour(self, behaviour, after_behaviour_fun):
+        """
+        TODO: docstring
+        """
         after_behaviour = self.AfterBehaviour(behaviour, after_behaviour_fun)
         self.add_behaviour(after_behaviour)
         return after_behaviour
 
     async def load_order(self, behaviour):
+        """
+        TODO: docstring
+        """
         assert self.loaded_order is None
         assert self.msg_order is not None
         assert self.order is not None
@@ -490,6 +532,9 @@ class TransportRobotAgent(Agent):
         self.add_after_behaviour(move_behaviour, self.deliver_order)
 
     async def deliver_order(self, behaviour):
+        """
+        TODO: docstring
+        """
         assert self.loaded_order is not None
         assert self.msg_order is not None
         assert self.order is not None
@@ -502,11 +547,17 @@ class TransportRobotAgent(Agent):
         self.order = None
 
     def get_order(self):
+        """
+        TODO: docstring
+        """
         destination = self.factory_map[self.order.location]
         move_behaviour = self.move(destination)
         self.add_after_behaviour(move_behaviour, self.load_order)
 
     async def handle_tr_request(self, msg, recv):
+        """
+        TODO: docstring
+        """
         assert self.msg_order is None
         assert self.order is None
         self.msg_order = msg
