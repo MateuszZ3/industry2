@@ -265,12 +265,12 @@ class Manager(Agent):
             print("Starting main loop . . .")
 
         async def run(self):
-            if not self.agent.gom_infos:
-                await sleep(settings.MANAGER_LOOP_TIMEOUT)
-                return
+            # if not self.agent.gom_infos:
+            #     await sleep(settings.MANAGER_LOOP_TIMEOUT)
+            #     return todo delete
             gom: GoMInfo = random.choice(self.agent.gom_infos)
             while not self.agent.orders:
-                await sleep(0.1)
+                await sleep(settings.MANAGER_LOOP_TIMEOUT)
             order: Order = heappop(self.agent.orders)
             print(order)
             oid = str(order.order_id)
