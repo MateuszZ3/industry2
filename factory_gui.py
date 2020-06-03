@@ -1,18 +1,16 @@
+import sys
+import time
+import traceback
+from math import sin, cos
+
+from PyQt5 import QtGui
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
-
-from PyQt5 import QtGui, uic
-
-import time
-import traceback, sys
-from math import sin, cos
-from random import randint
-
-from factory_agent import FactoryAgent
 from spade import quit_spade
-import settings
 
-from common import Point
+import settings
+from agents import FactoryAgent
+
 
 COLORS = [
     # 17 undertones https://lospec.com/palette-list/17undertones
