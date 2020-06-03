@@ -30,6 +30,17 @@ class GoMInfo:
     machines: List[Machine]
 
 
+class RecvBehaviour(CyclicBehaviour):
+    def __init__(self, handler):
+        super().__init__()
+        self.handler = handler
+
+    async def run(self):
+        msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
+        if msg is not None:
+            await self.handler(msg, self)
+
+
 class OrderFactory:
     """
     Creates `Orders`.
@@ -319,17 +330,6 @@ class Manager(Agent):
         done_temp.metadata = {"performative": "inform"}
         self.add_behaviour(self.done_handler, done_temp)
         self.add_behaviour(self.main_loop)
-
-
-class RecvBehaviour(CyclicBehaviour):
-    def __init__(self, handler):
-        super().__init__()
-        self.handler = handler
-
-    async def run(self):
-        msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
-        if msg is not None:
-            await self.handler(msg, self)
 
 
 class GroupOfMachinesAgent(Agent):
