@@ -30,6 +30,16 @@ class GoMInfo:
     machines: List[Machine]
 
 
+@dataclass
+class ActiveOrder:
+    order: Order
+    location: str  # "" - warehouse, "address@host" - socket_id
+
+    def advance(self, loc: str):
+        self.order.current_operation += 1
+        self.location = loc
+
+
 class RecvBehaviour(CyclicBehaviour):
     """
     Base receive handler behaviour.
@@ -245,14 +255,13 @@ class FactoryAgent(Agent):
 class Manager(Agent):
     class MainLoop(CyclicBehaviour):
         """
-        Main agent loop.
+        Main agent loop. Takes an order from the queue, if available, updates its state and sends a request to a GoM.
         """
 
         async def on_start(self):
             print("Starting main loop . . .")
 
         async def run(self):
-            #
             if not self.agent.gom_infos:
                 await sleep(settings.MANAGER_LOOP_TIMEOUT)
                 return
@@ -261,14 +270,14 @@ class Manager(Agent):
                 await sleep(0.1)
             order: Order = heappop(self.agent.orders)
             print(order)
-            last = self.agent.last_operation_location[
-                order.order_id] if order.order_id in self.agent.last_operation_location else ''
-            gorder = GoMOrder(order.priority, order.order_id, last, order.operations[order.current_operation])
-            self.agent.active_orders[order.order_id] = order
+            oid = str(order.order_id)
+            if oid not in self.agent.active_orders:
+                self.agent.active_orders[oid] = ActiveOrder(order, '')
+            gorder = GoMOrder.create(order, self.agent.active_orders[oid].location)
             msg = Message(to=gom.jid)
             msg.set_metadata("performative", "request")
             msg.body = gorder.to_json()
-            msg.thread = str(order.order_id)
+            msg.thread = oid
             print(f'manager send: {msg}')
             await self.send(msg)
 
@@ -292,10 +301,10 @@ class Manager(Agent):
 
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
-            oid = int(msg.thread)
-            order: Order = self.agent.active_orders[oid]
-            heappush(self.agent.orders, order)
-            self.agent.active_orders[oid] = None
+            oid = msg.thread
+            active_order: ActiveOrder = self.agent.active_orders[oid]
+            heappush(self.agent.orders, active_order.order)
+            # self.agent.active_orders[oid] = None todo remove
 
     class OrderAgreeHandler(CyclicBehaviour):
         """Agree from GoM"""
@@ -311,13 +320,11 @@ class Manager(Agent):
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
             oid = msg.thread
-            order: Order = self.agent.active_orders[int(oid)]
-            order.current_operation += 1
-            self.agent.last_operation_location[oid] = msg.sender
-            if not order.is_done():
-                heappush(self.agent.orders, order)
+            active_order: ActiveOrder = self.agent.active_orders[oid]
+            active_order.advance(msg.sender)
+            if not active_order.order.is_done():
+                heappush(self.agent.orders, active_order.order)
             else:
-                self.agent.last_operation_location[oid] = None
                 self.agent.active_orders[oid] = None
                 report = Message(self.agent.factory_jid)
                 report.set_metadata("performative", "inform")
@@ -330,8 +337,7 @@ class Manager(Agent):
         for gom_jid, operations in gom_infos:
             self.gom_infos.append(GoMInfo(jid=gom_jid, machines=[Machine(operation=op) for op in operations]))
         self.orders = []
-        self.active_orders = {}
-        self.last_operation_location = {}
+        self.active_orders = {}  # todo zamiana na PQ, tylko z (prio, id)
         self.factory_jid = factory_jid
         self.main_loop = self.MainLoop()
         self.req_handler = self.OrderRequestHandler()

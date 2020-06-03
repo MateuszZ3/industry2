@@ -26,6 +26,10 @@ class GoMOrder:
     location: str  # "" - warehouse, "address@host" - socket_id
     operation: Operation
 
+    @classmethod
+    def create(cls: type, order: Order, last: str):
+        return cls(order.priority, order.order_id, last, order.operations[order.current_operation])
+
 
 @dataclass
 class Point:
