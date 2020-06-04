@@ -33,7 +33,7 @@ class GoMInfo:
 @dataclass
 class ActiveOrder:
     order: Order
-    location: str  # "" - warehouse, "address@host" - socket_id
+    location: str  # "" - warehouse, "address@host" - gom_jid
 
     def advance(self, loc: str):
         self.order.current_operation += 1
@@ -44,8 +44,10 @@ class RecvBehaviour(CyclicBehaviour):
     """
     Base receive handler behaviour.
 
-    :param handler: Handler run when a message is received.
+    :param handler: Handler run when a message is received (takes two arguments, msg - received message
+        and recv - calling behaviour).
     """
+
     def __init__(self, handler):
         super().__init__()
         self.handler = handler
@@ -371,17 +373,18 @@ class GroupOfMachinesAgent(Agent):
         super().__init__(*args, **kwargs)
         self.manager_address = manager_address
         self.tr_address = tr_address
-        self.machines = defaultdict(list)  # TODO: Co to jest?
+        self.machines = defaultdict(list)  # GoM's Machines collection
         for operation in machines:
             self.machines[operation].append(
                 Machine(operation=operation, working=True))
-        self.order = None  # TODO: Co to jest?
-        self.msg_order = None  # TODO: Co to jest?
+        self.order = None  # current order
+        self.msg_order = None  # request message (from Manager) related to self.order
 
     class WorkBehaviour(OneShotBehaviour):
         """
-        Perform work on current order. TODO: Na pewno?
+        Perform work on current order.
         """
+
         async def run(self):
             assert self.agent.order is not None
             work_duration = settings.OP_DURATIONS[self.agent.order.operation]
@@ -399,11 +402,12 @@ class GroupOfMachinesAgent(Agent):
 
     def can_accept_order(self, order):
         """
-        TODO: docstring
+        Predicate that checks if TR can accept this order.
 
-        :param order:
-        :return:
+        :param order: requested order
+        :return: result
         """
+
         if order.operation not in self.machines:
             return False
         return all([
@@ -414,15 +418,23 @@ class GroupOfMachinesAgent(Agent):
     async def handle_tr_agree(self, msg, recv):
         """
         On `agree` message from `TR`.
-        `agree` stands for TODO: Co znaczy agree w tym wypadku?
+
+        :param msg: received message
+        :param recv: calling behaviour
+        TODO: Co znaczy agree w tym wypadku? Nic, zbierania wiadomosci tego typu z kolejki agenta
         """
+
         assert msg is not None
 
     async def handle_tr_inform(self, msg, recv):
         """
         On `inform` message from `TR`
-        TODO: Co znaczy inform w tym wypadku?
+
+        :param msg: received message
+        :param recv: calling behaviour
+        TODO: Co znaczy inform w tym wypadku? TR dostarczyl zamowienie wiec zaczyna prace.
         """
+
         assert msg is not None
         self.add_behaviour(self.WorkBehaviour())
         reply = self.msg_order.make_reply()
@@ -433,8 +445,11 @@ class GroupOfMachinesAgent(Agent):
         """
         On `request` message from `Manager`
 
-        TODO: Co znaczy request w tym wypadku?
+        :param msg: received message
+        :param recv: calling behaviour
+        TODO: Co znaczy request w tym wypadku? Jak moze przyjac zamowienie to akceptuje -> zamawia transport -> pracuje
         """
+
         reply = msg.make_reply()
         order = GoMOrder.from_json(msg.body)
         accepted = False
@@ -451,9 +466,8 @@ class GroupOfMachinesAgent(Agent):
             if str(self.jid) == order.location:
                 self.add_behaviour(self.WorkBehaviour())
             else:
-                msg_tr = Message(to=self.tr_address)
+                msg_tr = Message(to=self.tr_address, body=msg.body)
                 msg_tr.set_metadata('performative', 'request')
-                msg_tr.body = msg.body
                 await recv.send(msg_tr)
 
     async def setup(self):
@@ -477,14 +491,15 @@ class TransportRobotAgent(Agent):
         self.position = position
         self.gom_address = gom_address
         self.factory_map = factory_map
-        self.order = None  # mother gom
-        self.msg_order = None  # mother gom
+        self.order = None  # from mother gom
+        self.msg_order = None  # from mother gom
         self.loaded_order = None
 
     class MoveBehaviour(PeriodicBehaviour):
         """
-        Moves agent.
+        Moves agent behaviour.
         """
+
         def __init__(self, destination, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self.destination = destination  #
@@ -498,37 +513,53 @@ class TransportRobotAgent(Agent):
 
     class AfterBehaviour(OneShotBehaviour):
         """
-        TODO: docstring
+        Behavior which triggers handler after the previous one has finished.
+
+        :param wait_behaviour: first behaviour
+        :param after_handler: Handler runs when a wait_behaviour is finished (takes one argument, calling behaviour).
         """
-        def __init__(self, behaviour, after_behaviour_fun):
+
+        def __init__(self, wait_behaviour, after_handler):
             super().__init__()
-            self.behaviour = behaviour
-            self.after_behaviour_fun = after_behaviour_fun
+            self.wait_behaviour = wait_behaviour
+            self.after_handler = after_handler
 
         async def run(self):
-            await self.behaviour.join()
-            await self.after_behaviour_fun(self)
+            await self.wait_behaviour.join()
+            await self.after_handler(self)
 
     def move(self, destination):
         """
-        TODO: Matulu kochana, co tu się dzieje?
+        Moves TR
+
+        :param destination: location
+        :return: move behaviour
         """
+
         move_behaviour = self.MoveBehaviour(destination, period=0.1)
         self.add_behaviour(move_behaviour)
         return move_behaviour
 
-    def add_after_behaviour(self, behaviour, after_behaviour_fun):
+    def add_after_behaviour(self, wait_behaviour, after_handler):
         """
-        TODO: docstring
+        Add handler which triggers after a given behaviour.
+
+        :param wait_behaviour: wait_for
+        :param after_handler: Handler runs when a wait_behaviour is finished (takes one argument, calling behaviour).
+        :return: after behaviour
         """
-        after_behaviour = self.AfterBehaviour(behaviour, after_behaviour_fun)
+
+        after_behaviour = self.AfterBehaviour(wait_behaviour, after_handler)
         self.add_behaviour(after_behaviour)
         return after_behaviour
 
     async def load_order(self, behaviour):
         """
-        TODO: docstring
+        Load an order (self.order).
+
+        :param behaviour: calling behaviour
         """
+
         assert self.loaded_order is None
         assert self.msg_order is not None
         assert self.order is not None
@@ -539,8 +570,11 @@ class TransportRobotAgent(Agent):
 
     async def deliver_order(self, behaviour):
         """
-        TODO: docstring
+        Deliver an order (self.loaded) to GoM.
+
+        :param behaviour: calling behaviour
         """
+
         assert self.loaded_order is not None
         assert self.msg_order is not None
         assert self.order is not None
@@ -554,16 +588,21 @@ class TransportRobotAgent(Agent):
 
     def get_order(self):
         """
-        TODO: docstring
+        Get an order (self.order) for GoM.
         """
+
         destination = self.factory_map[self.order.location]
         move_behaviour = self.move(destination)
         self.add_after_behaviour(move_behaviour, self.load_order)
 
-    async def handle_tr_request(self, msg, recv):
+    async def handle_gom_request(self, msg, recv):
         """
-        TODO: docstring
+        On `request` message from `GoM`
+
+        :param msg: received message
+        :param recv: calling behaviour
         """
+
         assert self.msg_order is None
         assert self.order is None
         self.msg_order = msg
@@ -575,6 +614,6 @@ class TransportRobotAgent(Agent):
 
     async def setup(self):
         self.add_behaviour(
-            behaviour=RecvBehaviour(self.handle_tr_request),
+            behaviour=RecvBehaviour(self.handle_gom_request),
             template=Template(sender=self.gom_address, metadata={"performative": "request"})
         )
