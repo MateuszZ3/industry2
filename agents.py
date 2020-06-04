@@ -378,6 +378,7 @@ class GroupOfMachinesAgent(Agent):
         for operation in machines:
             self.machines[operation].append(
                 Machine(operation=operation, working=True))
+
         self.order = None  # current order
         self.msg_order = None  # request message (from Manager) related to self.order
 
@@ -388,11 +389,13 @@ class GroupOfMachinesAgent(Agent):
 
         async def run(self):
             assert self.agent.order is not None
+
             work_duration = settings.OP_DURATIONS[self.agent.order.operation]
             await asyncio.sleep(work_duration)
 
             # Reply to Manager with `inform`
             assert self.agent.msg_order is not None
+
             reply = self.agent.msg_order.make_reply()
             reply.set_metadata('performative', 'inform')
             await self.send(reply)
@@ -411,6 +414,7 @@ class GroupOfMachinesAgent(Agent):
 
         if order.operation not in self.machines:
             return False
+
         return all([
             self.order is None,
             any(machine.working for machine in self.machines[order.operation])
@@ -437,6 +441,7 @@ class GroupOfMachinesAgent(Agent):
         """
 
         assert msg is not None
+
         self.add_behaviour(self.WorkBehaviour())
         reply = self.msg_order.make_reply()
         reply.set_metadata('performative', 'inform')
@@ -456,12 +461,14 @@ class GroupOfMachinesAgent(Agent):
         accepted = False
         if self.can_accept_order(order):
             assert self.msg_order is None
+
             self.order = order
             self.msg_order = msg
             reply.set_metadata('performative', 'agree')
             accepted = True
         else:
             reply.set_metadata('performative', 'refuse')
+
         await recv.send(reply)
         if accepted:
             if str(self.jid) == order.location:
@@ -588,6 +595,7 @@ class TransportRobotAgent(Agent):
         assert self.loaded_order is None
         assert self.msg_order is not None
         assert self.order is not None
+
         self.loaded_order = self.order
         destination = self.factory_map[self.gom_jid]
         move_behaviour = self.move(destination)
@@ -603,10 +611,10 @@ class TransportRobotAgent(Agent):
         assert self.loaded_order is not None
         assert self.msg_order is not None
         assert self.order is not None
+
         reply = self.msg_order.make_reply()
         reply.set_metadata('performative', 'inform')
         await behaviour.send(reply)
-
         self.loaded_order = None
         self.msg_order = None
         self.order = None
@@ -630,6 +638,7 @@ class TransportRobotAgent(Agent):
 
         assert self.msg_order is None
         assert self.order is None
+
         self.msg_order = msg
         self.order = GoMOrder.from_json(msg.body)
         reply = self.msg_order.make_reply()
