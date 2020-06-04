@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 
+import numpy as np
 from dataclasses_json import dataclass_json
 
 from enums import Operation
@@ -35,3 +36,10 @@ class GoMOrder:
 class Point:
     x: float
     y: float
+
+    def to_array(self) -> np.array:
+        return np.array((self.x, self.y))
+
+    @classmethod
+    def create(cls, point: np.array):
+        return cls(point[0], point[1])

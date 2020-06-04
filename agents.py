@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from heapq import heappop, heappush
 from typing import List
 
+import numpy as np
 from spade.agent import Agent
 from spade.behaviour import OneShotBehaviour, CyclicBehaviour, PeriodicBehaviour
 from spade.message import Message
@@ -502,14 +503,32 @@ class TransportRobotAgent(Agent):
 
         def __init__(self, destination, *args, **kwargs):
             super().__init__(*args, **kwargs)
-            self.destination = destination  #
-            self.counter = 0
+            self.destination = destination
+            self.tick_distance = settings.TR_SPEED * self.period.total_seconds()
+
+        async def on_start(self):
+            await asyncio.sleep(self.period.total_seconds())
 
         async def run(self):
-            #  TODO real move
-            if self.counter > 5:
+            position = self.agent.position.to_array()
+            vector = self.destination.to_array() - position
+            remaining = np.linalg.norm(vector)
+            if remaining <= self.tick_distance:
+                self.agent.position = self.destination
+                await self.after_tick()  # call after kill (after if)?
                 self.kill()
-            self.counter += 1
+            else:
+                position += (self.tick_distance / remaining) * vector
+                self.agent.position = Point.create(position)
+                await self.after_tick()
+
+        async def after_tick(self):
+            """
+            Method called after each tick
+            """
+
+            # TODO inform gui
+            pass
 
     class AfterBehaviour(OneShotBehaviour):
         """
@@ -536,7 +555,7 @@ class TransportRobotAgent(Agent):
         :return: move behaviour
         """
 
-        move_behaviour = self.MoveBehaviour(destination, period=0.1)
+        move_behaviour = self.MoveBehaviour(destination, period=settings.TR_TICK_DURATION)
         self.add_behaviour(move_behaviour)
         return move_behaviour
 

@@ -10,11 +10,12 @@ AGENT_NAMES = {
     "factory": "factory",
 }
 PASSWORD = "password"
-TR_SPEED = 1
+TR_SPEED = 1  # px/s
 OP_DURATIONS = {
     Operation.DRILL: 1000,
-    Operation.MILL : 1500
+    Operation.MILL: 1500
 }
-RECEIVE_TIMEOUT = 10 * 60 * 1000  # ms
+RECEIVE_TIMEOUT = 15 * 60  # s
 MANAGER_LOOP_TIMEOUT = 0.1  # s
-AGENT_CREATION_SLEEP = 0.15
+AGENT_CREATION_SLEEP = 0.15  # s
+TR_TICK_DURATION = 0.1  # s
