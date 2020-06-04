@@ -32,6 +32,7 @@ class GoMOrder:
         return cls(order.priority, order.order_id, last, order.operations[order.current_operation])
 
 
+@dataclass_json
 @dataclass
 class Point:
     x: float

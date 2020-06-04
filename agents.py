@@ -103,7 +103,8 @@ class FactoryAgent(Agent):
 
                 # Create and start TR agent
                 tr = TransportRobotAgent(position=self.agent.tr_positions[i], gom_address=gom_jid,
-                                         factory_map=self.agent.factory_map, jid=tr_jid, password=settings.PASSWORD)
+                                         factory_address=str(self.agent.jid), factory_map=self.agent.factory_map,
+                                         jid=tr_jid, password=settings.PASSWORD)
                 await tr.start()
                 print(f'tr started tr_jid={tr_jid}')
                 await asyncio.sleep(settings.AGENT_CREATION_SLEEP)  # Wait around 100ms for registration to complete
@@ -487,10 +488,11 @@ class GroupOfMachinesAgent(Agent):
 
 
 class TransportRobotAgent(Agent):
-    def __init__(self, position, gom_address, factory_map, *args, **kwargs):
+    def __init__(self, position, gom_address, factory_address, factory_map, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.position = position
         self.gom_address = gom_address
+        self.factory_address = factory_address
         self.factory_map = factory_map
         self.order = None  # from mother gom
         self.msg_order = None  # from mother gom
@@ -527,8 +529,13 @@ class TransportRobotAgent(Agent):
             Method called after each tick
             """
 
-            # TODO inform gui
-            pass
+            msg = Message(
+                to=self.agent.factory_address,
+                thread=str(self.agent.jid),
+                body=self.agent.position.to_json()
+            )
+            msg.set_metadata("performative", "inform")
+            await self.send(msg)
 
     class AfterBehaviour(OneShotBehaviour):
         """
