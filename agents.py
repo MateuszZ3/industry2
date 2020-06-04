@@ -90,20 +90,19 @@ class FactoryAgent(Agent):
 
         async def run(self):
             gom_infos = []
-
             for i, (gom_jid, tr_jid) in enumerate(self.agent.jids, start=1):
                 # Create and start GoM agent
                 gom_operations = list(Operation)
                 gom_infos.append((gom_jid, gom_operations))
-                gom = GroupOfMachinesAgent(manager_address=self.agent.manager_jid, tr_address=tr_jid,
+                gom = GroupOfMachinesAgent(manager_jid=self.agent.manager_jid, tr_jid=tr_jid,
                                            machines=gom_operations, jid=gom_jid, password=settings.PASSWORD)
                 await gom.start()
                 print(f'gom started gom_jid={gom_jid}')
                 await asyncio.sleep(settings.AGENT_CREATION_SLEEP)  # Wait around 100ms for registration to complete
 
                 # Create and start TR agent
-                tr = TransportRobotAgent(position=self.agent.tr_positions[i], gom_address=gom_jid,
-                                         factory_address=str(self.agent.jid), factory_map=self.agent.factory_map,
+                tr = TransportRobotAgent(position=self.agent.tr_positions[i], gom_jid=gom_jid,
+                                         factory_jid=str(self.agent.jid), factory_map=self.agent.factory_map,
                                          jid=tr_jid, password=settings.PASSWORD)
                 await tr.start()
                 print(f'tr started tr_jid={tr_jid}')
@@ -371,10 +370,10 @@ class Manager(Agent):
 
 
 class GroupOfMachinesAgent(Agent):
-    def __init__(self, manager_address, tr_address, machines, *args, **kwargs):
+    def __init__(self, manager_jid, tr_jid, machines, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.manager_address = manager_address
-        self.tr_address = tr_address
+        self.manager_jid = manager_jid
+        self.tr_jid = tr_jid
         self.machines = defaultdict(list)  # GoM's Machines collection
         for operation in machines:
             self.machines[operation].append(
@@ -468,31 +467,31 @@ class GroupOfMachinesAgent(Agent):
             if str(self.jid) == order.location:
                 self.add_behaviour(self.WorkBehaviour())
             else:
-                msg_tr = Message(to=self.tr_address, body=msg.body)
+                msg_tr = Message(to=self.tr_jid, body=msg.body)
                 msg_tr.set_metadata('performative', 'request')
                 await recv.send(msg_tr)
 
     async def setup(self):
         self.add_behaviour(
             behaviour=RecvBehaviour(self.handle_manager_request),
-            template=Template(sender=self.manager_address, metadata={"performative": "request"})
+            template=Template(sender=self.manager_jid, metadata={"performative": "request"})
         )
         self.add_behaviour(
             behaviour=RecvBehaviour(self.handle_tr_agree),
-            template=Template(sender=self.tr_address, metadata={"performative": "agree"})
+            template=Template(sender=self.tr_jid, metadata={"performative": "agree"})
         )
         self.add_behaviour(
             behaviour=RecvBehaviour(self.handle_tr_inform),
-            template=Template(sender=self.tr_address, metadata={"performative": "inform"})
+            template=Template(sender=self.tr_jid, metadata={"performative": "inform"})
         )
 
 
 class TransportRobotAgent(Agent):
-    def __init__(self, position, gom_address, factory_address, factory_map, *args, **kwargs):
+    def __init__(self, position, gom_jid, factory_jid, factory_map, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.position = position
-        self.gom_address = gom_address
-        self.factory_address = factory_address
+        self.gom_jid = gom_jid
+        self.factory_jid = factory_jid
         self.factory_map = factory_map
         self.order = None  # from mother gom
         self.msg_order = None  # from mother gom
@@ -530,7 +529,7 @@ class TransportRobotAgent(Agent):
             """
 
             msg = Message(
-                to=self.agent.factory_address,
+                to=self.agent.factory_jid,
                 thread=str(self.agent.jid),
                 body=self.agent.position.to_json()
             )
@@ -590,7 +589,7 @@ class TransportRobotAgent(Agent):
         assert self.msg_order is not None
         assert self.order is not None
         self.loaded_order = self.order
-        destination = self.factory_map[self.gom_address]
+        destination = self.factory_map[self.gom_jid]
         move_behaviour = self.move(destination)
         self.add_after_behaviour(move_behaviour, self.deliver_order)
 
@@ -641,5 +640,5 @@ class TransportRobotAgent(Agent):
     async def setup(self):
         self.add_behaviour(
             behaviour=RecvBehaviour(self.handle_gom_request),
-            template=Template(sender=self.gom_address, metadata={"performative": "request"})
+            template=Template(sender=self.gom_jid, metadata={"performative": "request"})
         )
