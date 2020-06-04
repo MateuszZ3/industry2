@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from heapq import heappop, heappush
 from typing import List
 
+import numpy as np
 from spade.agent import Agent
 from spade.behaviour import OneShotBehaviour, CyclicBehaviour, PeriodicBehaviour
 from spade.message import Message
@@ -30,7 +31,24 @@ class GoMInfo:
     machines: List[Machine]
 
 
+@dataclass
+class ActiveOrder:
+    order: Order
+    location: str  # "" - warehouse, "address@host" - gom_jid
+
+    def advance(self, loc: str):
+        self.order.current_operation += 1
+        self.location = loc
+
+
 class RecvBehaviour(CyclicBehaviour):
+    """
+    Base receive handler behaviour.
+
+    :param handler: Handler run when a message is received (takes two arguments, msg - received message
+        and recv - calling behaviour).
+    """
+
     def __init__(self, handler):
         super().__init__()
         self.handler = handler
@@ -73,23 +91,27 @@ class FactoryAgent(Agent):
         async def run(self):
             gom_infos = []
             for i, (gom_jid, tr_jid) in enumerate(self.agent.jids, start=1):
+                # Create and start GoM agent
                 gom_operations = list(Operation)
                 gom_infos.append((gom_jid, gom_operations))
-                gom = GroupOfMachinesAgent(manager_address=self.agent.manager_jid, tr_address=tr_jid,
+                gom = GroupOfMachinesAgent(manager_jid=self.agent.manager_jid, tr_jid=tr_jid,
                                            machines=gom_operations, jid=gom_jid, password=settings.PASSWORD)
                 await gom.start()
-                print(f'gom started {gom_jid=}')
-                await asyncio.sleep(settings.AGENT_CREATION_SLEEP)
-                tr = TransportRobotAgent(position=self.agent.tr_positions[i], gom_address=gom_jid,
-                                         factory_map=self.agent.factory_map, jid=tr_jid, password=settings.PASSWORD)
-                await tr.start()
-                print(f'tr started {tr_jid=}')
-                await asyncio.sleep(settings.AGENT_CREATION_SLEEP)
+                print(f'gom started gom_jid={gom_jid}')
+                await asyncio.sleep(settings.AGENT_CREATION_SLEEP)  # Wait around 100ms for registration to complete
 
+                # Create and start TR agent
+                tr = TransportRobotAgent(position=self.agent.tr_positions[i], gom_jid=gom_jid,
+                                         factory_jid=str(self.agent.jid), factory_map=self.agent.factory_map,
+                                         jid=tr_jid, password=settings.PASSWORD)
+                await tr.start()
+                print(f'tr started tr_jid={tr_jid}')
+                await asyncio.sleep(settings.AGENT_CREATION_SLEEP)  # Wait around 100ms for registration to complete
+
+            # Create and start Manager agent
             manager = Manager(factory_jid=str(self.agent.jid), gom_infos=gom_infos, jid=self.agent.manager_jid,
                               password=settings.PASSWORD)
             await manager.start()
-            print('manger')
 
     class OrderBehav(PeriodicBehaviour):
         """
@@ -98,7 +120,6 @@ class FactoryAgent(Agent):
 
         async def run(self):
             await self.agent.start_behaviour.join()
-            print('after start')
             # print(f"Running {type(self).__name__}...")
 
             order = self.agent.order_factory.create()
@@ -116,7 +137,7 @@ class FactoryAgent(Agent):
 
     class OrderAgreeHandler(CyclicBehaviour):
         """
-        On `agree` from `Manager`.
+        On `agree` message from `Manager`.
         """
 
         async def run(self):
@@ -126,7 +147,7 @@ class FactoryAgent(Agent):
 
     class OrderFailureHandler(CyclicBehaviour):
         """
-        On `failure` from `Manager`.
+        On `failure` message from `Manager`.
         """
 
         async def run(self):
@@ -136,7 +157,7 @@ class FactoryAgent(Agent):
 
     class OrderDoneHandler(CyclicBehaviour):
         """
-        On `inform` from `Manager`.
+        On `inform` message from `Manager`.
         """
 
         async def run(self):
@@ -147,23 +168,25 @@ class FactoryAgent(Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Orders
-        self.unused_id = 1
+        self.unused_id = 1  # Currently unused Order ID
         self.orders = {}
         self.order_factory = OrderFactory()
         self.order_behav = None
 
-        self.update_callback = None
-
-        self.manager_jid = f"{settings.AGENT_NAMES['manager']}@{settings.HOST}"
+        self.update_callback = None  # Callback used for updating GUI.
 
         # GoM IDs start with 1, so that 0 can be used as set-aside's ID
         self.gom_count = 12
         self.gom_positions = [Point(x=-128.0, y=0.0)]  # [0] is set-aside position
         self.tr_positions = [None]  # [0] is a placeholder
+        # Maps JID to Point
         self.factory_map = {
-            '' : self.gom_positions[0]
+            '': self.gom_positions[0]
         }
-        self.jids = self.create()
+
+        # JIDs
+        self.manager_jid = f"{settings.AGENT_NAMES['manager']}@{settings.HOST}"
+        self.jids = self.prepare()
 
         # Behaviours
         start_at = datetime.datetime.now() + datetime.timedelta(seconds=5)
@@ -203,51 +226,64 @@ class FactoryAgent(Agent):
     def set_update_callback(self, callback) -> None:
         """
         Sets callback used for updating GUI.
+
         :param callback: callback
         """
         self.update_callback = callback
 
-    def create(self):
+    def prepare(self):
+        """
+        Generates positions and JIDs for GoMs and TRs
+
+        :return:
+        """
         per_col = 5
         spray_diameter = 10
         jids = []
         for i in range(self.gom_count):
+            # Create GoM and TR positions
             y = (i % per_col) * 48 - 96
             x = int(i / per_col) * 64 - 32
             xo = random.gauss(0, spray_diameter)
             yo = random.gauss(0, spray_diameter)
             self.gom_positions.append(Point(x=x, y=y))
             self.tr_positions.append(Point(x=x + xo, y=y + yo))
+
+            # Create JIDs
             gom_jid = f"{settings.AGENT_NAMES['gom_base']}{i + 1}@{settings.HOST}"
             tr_jid = f"{settings.AGENT_NAMES['tr_base']}{i + 1}@{settings.HOST}"
             jids.append((gom_jid, tr_jid))
             self.factory_map[gom_jid] = Point(x=x, y=y)
+
         return jids
 
 
 class Manager(Agent):
     class MainLoop(CyclicBehaviour):
-        """Main agent loop"""
+        """
+        Main agent loop. Takes an order from the queue, if available, updates its state and sends a request to a GoM.
+        """
+
         async def on_start(self):
             print("Starting main loop . . .")
 
         async def run(self):
-            if not self.agent.gom_infos:
-                await sleep(settings.MANAGER_LOOP_TIMEOUT)
-                return
+            # if not self.agent.gom_infos:
+            #     await sleep(settings.MANAGER_LOOP_TIMEOUT)
+            #     return todo delete
             gom: GoMInfo = random.choice(self.agent.gom_infos)
             while not self.agent.orders:
-                await sleep(0.1)
+                await sleep(settings.MANAGER_LOOP_TIMEOUT)
             order: Order = heappop(self.agent.orders)
             print(order)
-            last = self.agent.last_operation_location[
-                order.order_id] if order.order_id in self.agent.last_operation_location else ''
-            gorder = GoMOrder(order.priority, order.order_id, last, order.operations[order.current_operation])
-            self.agent.active_orders[order.order_id] = order
+            oid = str(order.order_id)
+            if oid not in self.agent.active_orders:
+                self.agent.active_orders[oid] = ActiveOrder(order, '')
+            gorder = GoMOrder.create(order, self.agent.active_orders[oid].location)
             msg = Message(to=gom.jid)
             msg.set_metadata("performative", "request")
             msg.body = gorder.to_json()
-            msg.thread = str(order.order_id)
+            msg.thread = oid
             print(f'manager send: {msg}')
             await self.send(msg)
 
@@ -256,6 +292,7 @@ class Manager(Agent):
 
     class OrderRequestHandler(CyclicBehaviour):
         """Request from factory"""
+
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
             order = Order.from_json(msg.body)
@@ -267,15 +304,17 @@ class Manager(Agent):
 
     class OrderRefuseHandler(CyclicBehaviour):
         """Refuse from GoM"""
+
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
-            oid = int(msg.thread)
-            order: Order = self.agent.active_orders[oid]
-            heappush(self.agent.orders, order)
-            self.agent.active_orders[oid] = None
+            oid = msg.thread
+            active_order: ActiveOrder = self.agent.active_orders[oid]
+            heappush(self.agent.orders, active_order.order)
+            # self.agent.active_orders[oid] = None todo remove
 
     class OrderAgreeHandler(CyclicBehaviour):
         """Agree from GoM"""
+
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
             print('agree received for order ' + msg.thread)
@@ -283,16 +322,15 @@ class Manager(Agent):
 
     class OrderDoneHandler(CyclicBehaviour):
         """Inform from GoM"""
+
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
             oid = msg.thread
-            order: Order = self.agent.active_orders[int(oid)]
-            order.current_operation += 1
-            self.agent.last_operation_location[oid] = msg.sender
-            if not order.is_done():
-                heappush(self.agent.orders, order)
+            active_order: ActiveOrder = self.agent.active_orders[oid]
+            active_order.advance(str(msg.sender))
+            if not active_order.order.is_done():
+                heappush(self.agent.orders, active_order.order)
             else:
-                self.agent.last_operation_location[oid] = None
                 self.agent.active_orders[oid] = None
                 report = Message(self.agent.factory_jid)
                 report.set_metadata("performative", "inform")
@@ -305,8 +343,7 @@ class Manager(Agent):
         for gom_jid, operations in gom_infos:
             self.gom_infos.append(GoMInfo(jid=gom_jid, machines=[Machine(operation=op) for op in operations]))
         self.orders = []
-        self.active_orders = {}
-        self.last_operation_location = {}
+        self.active_orders = {}  # todo zamiana na PQ, tylko z (prio, id)
         self.factory_jid = factory_jid
         self.main_loop = self.MainLoop()
         self.req_handler = self.OrderRequestHandler()
@@ -333,157 +370,275 @@ class Manager(Agent):
 
 
 class GroupOfMachinesAgent(Agent):
-    def __init__(self, manager_address, tr_address, machines, *args, **kwargs):
+    def __init__(self, manager_jid, tr_jid, machines, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.manager_address = manager_address
-        self.tr_address = tr_address
-        self.machines = defaultdict(list)
+        self.manager_jid = manager_jid
+        self.tr_jid = tr_jid
+        self.machines = defaultdict(list)  # GoM's Machines collection
         for operation in machines:
             self.machines[operation].append(
                 Machine(operation=operation, working=True))
-        self.order = None
-        self.msg_order = None
+
+        self.order = None  # current order
+        self.msg_order = None  # request message (from Manager) related to self.order
 
     class WorkBehaviour(OneShotBehaviour):
+        """
+        Perform work on current order.
+        """
+
         async def run(self):
             assert self.agent.order is not None
+
             work_duration = settings.OP_DURATIONS[self.agent.order.operation]
             await asyncio.sleep(work_duration)
 
+            # Reply to Manager with `inform`
             assert self.agent.msg_order is not None
+
             reply = self.agent.msg_order.make_reply()
             reply.set_metadata('performative', 'inform')
             await self.send(reply)
 
+            # Set no active order
             self.agent.order = None
             self.agent.msg_order = None
 
     def can_accept_order(self, order):
+        """
+        Predicate that checks if TR can accept this order.
+
+        :param order: requested order
+        :return: result
+        """
+
         if order.operation not in self.machines:
             return False
+
         return all([
             self.order is None,
             any(machine.working for machine in self.machines[order.operation])
         ])
 
     async def handle_tr_agree(self, msg, recv):
+        """
+        On `agree` message from `TR`.
+
+        :param msg: received message
+        :param recv: calling behaviour
+        TODO: Co znaczy agree w tym wypadku? Nic, zbierania wiadomosci tego typu z kolejki agenta
+        """
+
         assert msg is not None
 
     async def handle_tr_inform(self, msg, recv):
+        """
+        On `inform` message from `TR`
+
+        :param msg: received message
+        :param recv: calling behaviour
+        TODO: Co znaczy inform w tym wypadku? TR dostarczyl zamowienie wiec zaczyna prace.
+        """
+
         assert msg is not None
+
         self.add_behaviour(self.WorkBehaviour())
         reply = self.msg_order.make_reply()
         reply.set_metadata('performative', 'inform')
         await recv.send(reply)
 
     async def handle_manager_request(self, msg, recv):
+        """
+        On `request` message from `Manager`
+
+        :param msg: received message
+        :param recv: calling behaviour
+        TODO: Co znaczy request w tym wypadku? Jak moze przyjac zamowienie to akceptuje -> zamawia transport -> pracuje
+        """
+
         reply = msg.make_reply()
         order = GoMOrder.from_json(msg.body)
         accepted = False
         if self.can_accept_order(order):
             assert self.msg_order is None
+
             self.order = order
             self.msg_order = msg
             reply.set_metadata('performative', 'agree')
             accepted = True
         else:
             reply.set_metadata('performative', 'refuse')
+
         await recv.send(reply)
         if accepted:
             if str(self.jid) == order.location:
                 self.add_behaviour(self.WorkBehaviour())
             else:
-                msg_tr = Message(to=self.tr_address)
+                msg_tr = Message(to=self.tr_jid, body=msg.body)
                 msg_tr.set_metadata('performative', 'request')
-                msg_tr.body = msg.body
                 await recv.send(msg_tr)
 
     async def setup(self):
         self.add_behaviour(
             behaviour=RecvBehaviour(self.handle_manager_request),
-            template=Template(sender=self.manager_address, metadata={"performative": "request"})
+            template=Template(sender=self.manager_jid, metadata={"performative": "request"})
         )
         self.add_behaviour(
             behaviour=RecvBehaviour(self.handle_tr_agree),
-            template=Template(sender=self.tr_address, metadata={"performative": "agree"})
+            template=Template(sender=self.tr_jid, metadata={"performative": "agree"})
         )
         self.add_behaviour(
             behaviour=RecvBehaviour(self.handle_tr_inform),
-            template=Template(sender=self.tr_address, metadata={"performative": "inform"})
+            template=Template(sender=self.tr_jid, metadata={"performative": "inform"})
         )
 
 
 class TransportRobotAgent(Agent):
-    def __init__(self, position, gom_address, factory_map, *args, **kwargs):
+    def __init__(self, position, gom_jid, factory_jid, factory_map, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.position = position
-        self.gom_address = gom_address
+        self.gom_jid = gom_jid
+        self.factory_jid = factory_jid
         self.factory_map = factory_map
-        self.order = None  # mother gom
-        self.msg_order = None  # mother gom
+        self.order = None  # from mother gom
+        self.msg_order = None  # from mother gom
         self.loaded_order = None
 
     class MoveBehaviour(PeriodicBehaviour):
+        """
+        Moves agent behaviour.
+        """
+
         def __init__(self, destination, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self.destination = destination
-            self.counter = 0
+            self.tick_distance = settings.TR_SPEED * self.period.total_seconds()
+
+        async def on_start(self):
+            await asyncio.sleep(self.period.total_seconds())
 
         async def run(self):
-            #  TODO real move
-            if self.counter > 5:
+            position = self.agent.position.to_array()
+            vector = self.destination.to_array() - position
+            remaining = np.linalg.norm(vector)
+            if remaining <= self.tick_distance:
+                self.agent.position = self.destination
+                await self.after_tick()  # call after kill (after if)?
                 self.kill()
-            self.counter += 1
+            else:
+                position += (self.tick_distance / remaining) * vector
+                self.agent.position = Point.create(position)
+                await self.after_tick()
+
+        async def after_tick(self):
+            """
+            Method called after each tick
+            """
+
+            msg = Message(
+                to=self.agent.factory_jid,
+                thread=str(self.agent.jid),
+                body=self.agent.position.to_json()
+            )
+            msg.set_metadata("performative", "inform")
+            await self.send(msg)
 
     class AfterBehaviour(OneShotBehaviour):
-        def __init__(self, behaviour, after_behaviour_fun):
+        """
+        Behavior which triggers handler after the previous one has finished.
+
+        :param wait_behaviour: first behaviour
+        :param after_handler: Handler runs when a wait_behaviour is finished (takes one argument, calling behaviour).
+        """
+
+        def __init__(self, wait_behaviour, after_handler):
             super().__init__()
-            self.behaviour = behaviour
-            self.after_behaviour_fun = after_behaviour_fun
+            self.wait_behaviour = wait_behaviour
+            self.after_handler = after_handler
 
         async def run(self):
-            await self.behaviour.join()
-            await self.after_behaviour_fun(self)
+            await self.wait_behaviour.join()
+            await self.after_handler(self)
 
     def move(self, destination):
-        move_behaviour = self.MoveBehaviour(destination, period=0.1)
+        """
+        Moves TR
+
+        :param destination: location
+        :return: move behaviour
+        """
+
+        move_behaviour = self.MoveBehaviour(destination, period=settings.TR_TICK_DURATION)
         self.add_behaviour(move_behaviour)
         return move_behaviour
 
-    def add_after_behaviour(self, behaviour, after_behaviour_fun):
-        after_behaviour = self.AfterBehaviour(behaviour, after_behaviour_fun)
+    def add_after_behaviour(self, wait_behaviour, after_handler):
+        """
+        Add handler which triggers after a given behaviour.
+
+        :param wait_behaviour: wait_for
+        :param after_handler: Handler runs when a wait_behaviour is finished (takes one argument, calling behaviour).
+        :return: after behaviour
+        """
+
+        after_behaviour = self.AfterBehaviour(wait_behaviour, after_handler)
         self.add_behaviour(after_behaviour)
         return after_behaviour
 
     async def load_order(self, behaviour):
+        """
+        Load an order (self.order).
+
+        :param behaviour: calling behaviour
+        """
+
         assert self.loaded_order is None
         assert self.msg_order is not None
         assert self.order is not None
+
         self.loaded_order = self.order
-        destination = self.factory_map[self.gom_address]
+        destination = self.factory_map[self.gom_jid]
         move_behaviour = self.move(destination)
         self.add_after_behaviour(move_behaviour, self.deliver_order)
 
     async def deliver_order(self, behaviour):
+        """
+        Deliver an order (self.loaded) to GoM.
+
+        :param behaviour: calling behaviour
+        """
+
         assert self.loaded_order is not None
         assert self.msg_order is not None
         assert self.order is not None
+
         reply = self.msg_order.make_reply()
         reply.set_metadata('performative', 'inform')
         await behaviour.send(reply)
-
         self.loaded_order = None
         self.msg_order = None
         self.order = None
 
     def get_order(self):
+        """
+        Get an order (self.order) for GoM.
+        """
+
         destination = self.factory_map[self.order.location]
         move_behaviour = self.move(destination)
         self.add_after_behaviour(move_behaviour, self.load_order)
 
-    async def handle_tr_request(self, msg, recv):
+    async def handle_gom_request(self, msg, recv):
+        """
+        On `request` message from `GoM`
+
+        :param msg: received message
+        :param recv: calling behaviour
+        """
+
         assert self.msg_order is None
         assert self.order is None
+
         self.msg_order = msg
         self.order = GoMOrder.from_json(msg.body)
         reply = self.msg_order.make_reply()
@@ -493,6 +648,6 @@ class TransportRobotAgent(Agent):
 
     async def setup(self):
         self.add_behaviour(
-            behaviour=RecvBehaviour(self.handle_tr_request),
-            template=Template(sender=self.gom_address, metadata={"performative": "request"})
+            behaviour=RecvBehaviour(self.handle_gom_request),
+            template=Template(sender=self.gom_jid, metadata={"performative": "request"})
         )
