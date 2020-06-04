@@ -1,3 +1,5 @@
 spade>=3.1.4
 dataclasses-json>=0.4.5
 pyqt5>=5.14.2
+numpy>=1.18.5
+
