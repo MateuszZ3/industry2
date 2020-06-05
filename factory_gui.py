@@ -36,13 +36,13 @@ class WorkerSignals(QObject):
         `object` data returned from processing, anything
 
     progress
-        `int` indicating % progress
+        `bool` indicating whether to redraw scene
 
     """
     finished = pyqtSignal()
     error = pyqtSignal(tuple)
     result = pyqtSignal(object)
-    progress = pyqtSignal(int)
+    progress = pyqtSignal(bool)
 
 
 class Worker(QRunnable):
@@ -119,7 +119,7 @@ class Canvas(QLabel):
 
     def clear_scene(self) -> None:
         """
-        Clears scene but DOES NOT call update.
+        Clears scene.
         """
 
         pixmap = self.pixmap()
@@ -136,20 +136,24 @@ class Canvas(QLabel):
         p.setWidth(12)
         p.setColor(self.aside_color)
         painter.setPen(p)
-        self.draw_point(self.factory_agent.gom_positions[0], painter)
+        self.draw_point(self.factory_agent.factory_map[""], painter)
 
+        # Draw GoMs
         p.setColor(self.gom_color)
         painter.setPen(p)
-        for gom in self.factory_agent.gom_positions[1:]:
-            self.draw_point(gom, painter)
+        for jid in self.factory_agent.factory_map:
+            if jid != "":  # set-aside already drawn
+                pt = self.factory_agent.factory_map[jid]
+                self.draw_point(pt, painter)
 
         # Draw TRs
         p.setWidth(4)
         p.setColor(self.tr_color)
         painter.setPen(p)
 
-        for tr in self.factory_agent.tr_positions[1:]:
-            self.draw_point(tr, painter)
+        for jid in self.factory_agent.tr_map:
+            pt = self.factory_agent.tr_map[jid]
+            self.draw_point(pt, painter)
 
         painter.end()
         self.update()
@@ -193,15 +197,14 @@ class MainWindow(QMainWindow):
         self.thread_pool = QThreadPool()
         print("Multithreading with maximum %d threads" % self.thread_pool.maxThreadCount())
 
-        # tmp
-        self.counter = 0
+        # Redraw scene every 100ms
         self.timer = QTimer()
         self.timer.setInterval(100)
         self.timer.timeout.connect(self.recurring_timer)
         self.timer.start()
 
-    def progress_fn(self, n) -> None:
-        print(f"[progress_fn] {n}")
+    def progress_fn(self, flag) -> None:
+        print(f"[progress_fn] {flag}")
 
     def execute_agent(self, update_callback):
         agent = self.factory_agent
@@ -243,9 +246,6 @@ class MainWindow(QMainWindow):
         self.thread_pool.start(worker)
 
     def recurring_timer(self) -> None:
-        self.counter += 0.05
-        self.canvas.agents[0].setX(round(cos(self.counter) * 100) + 120)
-        self.canvas.agents[0].setY(round(sin(self.counter) * 100) + 120)
         self.canvas.draw_scene()
 
 
