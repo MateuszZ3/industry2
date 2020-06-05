@@ -10,7 +10,7 @@ AGENT_NAMES = {
     "factory": "factory",
 }
 PASSWORD = "password"
-TR_SPEED = 1  # px/s
+TR_SPEED = 10  # px/s
 OP_DURATIONS = {
     Operation.DRILL: 1000,
     Operation.MILL: 1500

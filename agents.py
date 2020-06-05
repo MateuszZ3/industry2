@@ -74,6 +74,7 @@ class OrderFactory:
             priority=1,
             order_id=self.unused_id,
             current_operation=0,
+            tr_count=[1] * 4,
             operations=ops
         )
 
@@ -101,7 +102,7 @@ class FactoryAgent(Agent):
                 await asyncio.sleep(settings.AGENT_CREATION_SLEEP)  # Wait around 100ms for registration to complete
 
                 # Create and start TR agent
-                tr = TransportRobotAgent(position=self.agent.tr_positions[i], gom_jid=gom_jid,
+                tr = TransportRobotAgent(position=self.agent.tr_map[tr_jid], gom_jid=gom_jid,
                                          factory_jid=str(self.agent.jid), factory_map=self.agent.factory_map,
                                          jid=tr_jid, password=settings.PASSWORD)
                 await tr.start()
@@ -133,8 +134,6 @@ class FactoryAgent(Agent):
             await self.send(msg)
             print(f"Message sent!\n{msg}")
 
-            self.agent.update_callback.emit(order.order_id)  # tmp: Emit progress signal with int
-
     class OrderAgreeHandler(CyclicBehaviour):
         """
         On `agree` message from `Manager`.
@@ -165,6 +164,19 @@ class FactoryAgent(Agent):
             if msg is not None:
                 print(msg)
 
+    class PositionHandler(CyclicBehaviour):
+        """
+        On `inform` message from `TR` signifying position change.
+        Position is sent in body as `Point`.
+        """
+        async def run(self):
+            msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
+            if msg is not None:
+                tr_jid = str(msg.sender)
+                pos = Point.from_json(msg.body)
+                self.agent.tr_map[tr_jid] = pos
+                # self.agent.update_callback.emit(True)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Orders
@@ -177,12 +189,12 @@ class FactoryAgent(Agent):
 
         # GoM IDs start with 1, so that 0 can be used as set-aside's ID
         self.gom_count = 12
-        self.gom_positions = [Point(x=-128.0, y=0.0)]  # [0] is set-aside position
-        self.tr_positions = [None]  # [0] is a placeholder
+
         # Maps JID to Point
         self.factory_map = {
-            '': self.gom_positions[0]
+            '': Point(x=-128.0, y=0.0)
         }
+        self.tr_map = {}
 
         # JIDs
         self.manager_jid = f"{settings.AGENT_NAMES['manager']}@{settings.HOST}"
@@ -195,6 +207,7 @@ class FactoryAgent(Agent):
         self.agr_handler = self.OrderAgreeHandler()
         self.fail_handler = self.OrderFailureHandler()
         self.done_handler = self.OrderDoneHandler()
+        self.position_handler = self.PositionHandler()
 
     async def setup(self):
         print(f"TickerAgent started at {datetime.datetime.now().time()}")
@@ -221,6 +234,13 @@ class FactoryAgent(Agent):
         done_temp.metadata = {"performative": "inform"}
         self.add_behaviour(self.done_handler, done_temp)
 
+        inf_temp = Template()
+        inf_temp.metadata = {"performative": "inform"}
+        manager_temp = Template()
+        manager_temp.sender = self.manager_jid
+        pos_temp = (inf_temp & ~manager_temp)
+        self.add_behaviour(self.position_handler, pos_temp)
+
         self.add_behaviour(self.StartAgents())
 
     def set_update_callback(self, callback) -> None:
@@ -241,19 +261,19 @@ class FactoryAgent(Agent):
         spray_diameter = 10
         jids = []
         for i in range(self.gom_count):
+            # Create JIDs
+            gom_jid = f"{settings.AGENT_NAMES['gom_base']}{i + 1}@{settings.HOST}"
+            tr_jid = f"{settings.AGENT_NAMES['tr_base']}{i + 1}@{settings.HOST}"
+            jids.append((gom_jid, tr_jid))
+
             # Create GoM and TR positions
             y = (i % per_col) * 48 - 96
             x = int(i / per_col) * 64 - 32
             xo = random.gauss(0, spray_diameter)
             yo = random.gauss(0, spray_diameter)
-            self.gom_positions.append(Point(x=x, y=y))
-            self.tr_positions.append(Point(x=x + xo, y=y + yo))
 
-            # Create JIDs
-            gom_jid = f"{settings.AGENT_NAMES['gom_base']}{i + 1}@{settings.HOST}"
-            tr_jid = f"{settings.AGENT_NAMES['tr_base']}{i + 1}@{settings.HOST}"
-            jids.append((gom_jid, tr_jid))
             self.factory_map[gom_jid] = Point(x=x, y=y)
+            self.tr_map[tr_jid] = Point(x=x + xo, y=y + yo)
 
         return jids
 
@@ -268,9 +288,6 @@ class Manager(Agent):
             print("Starting main loop . . .")
 
         async def run(self):
-            # if not self.agent.gom_infos:
-            #     await sleep(settings.MANAGER_LOOP_TIMEOUT)
-            #     return todo delete
             gom: GoMInfo = random.choice(self.agent.gom_infos)
             while not self.agent.orders:
                 await sleep(settings.MANAGER_LOOP_TIMEOUT)
@@ -310,7 +327,6 @@ class Manager(Agent):
             oid = msg.thread
             active_order: ActiveOrder = self.agent.active_orders[oid]
             heappush(self.agent.orders, active_order.order)
-            # self.agent.active_orders[oid] = None todo remove
 
     class OrderAgreeHandler(CyclicBehaviour):
         """Agree from GoM"""
@@ -537,7 +553,6 @@ class TransportRobotAgent(Agent):
 
             msg = Message(
                 to=self.agent.factory_jid,
-                thread=str(self.agent.jid),
                 body=self.agent.position.to_json()
             )
             msg.set_metadata("performative", "inform")
