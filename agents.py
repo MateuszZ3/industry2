@@ -166,12 +166,12 @@ class FactoryAgent(Agent):
     class PositionHandler(CyclicBehaviour):
         """
         On `inform` message from `TR` signifying position change.
-        Thread is `TR`'s `JID`, body is position (`Point`).
+        Position is sent in body as `Point`.
         """
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
             if msg is not None:
-                tr_jid = msg.thread
+                tr_jid = str(msg.sender)
                 pos = Point.from_json(msg.body)
                 self.agent.tr_map[tr_jid] = pos
                 # self.agent.update_callback.emit(True)
@@ -556,7 +556,6 @@ class TransportRobotAgent(Agent):
 
             msg = Message(
                 to=self.agent.factory_jid,
-                thread=str(self.agent.jid),
                 body=self.agent.position.to_json()
             )
             msg.set_metadata("performative", "inform")
