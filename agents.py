@@ -74,6 +74,7 @@ class OrderFactory:
             priority=1,
             order_id=self.unused_id,
             current_operation=0,
+            tr_count=[1] * 4,
             operations=ops
         )
 
@@ -287,9 +288,6 @@ class Manager(Agent):
             print("Starting main loop . . .")
 
         async def run(self):
-            # if not self.agent.gom_infos:
-            #     await sleep(settings.MANAGER_LOOP_TIMEOUT)
-            #     return todo delete
             gom: GoMInfo = random.choice(self.agent.gom_infos)
             while not self.agent.orders:
                 await sleep(settings.MANAGER_LOOP_TIMEOUT)
@@ -329,7 +327,6 @@ class Manager(Agent):
             oid = msg.thread
             active_order: ActiveOrder = self.agent.active_orders[oid]
             heappush(self.agent.orders, active_order.order)
-            # self.agent.active_orders[oid] = None todo remove
 
     class OrderAgreeHandler(CyclicBehaviour):
         """Agree from GoM"""
