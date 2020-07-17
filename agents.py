@@ -69,12 +69,13 @@ class OrderFactory:
         self.op_list = list(Operation)
 
     def create(self) -> Order:
-        ops = [random.choice(self.op_list) for i in range(4)]
+        ops_num = random.randint(3, 10)
+        ops = [random.choice(self.op_list) for i in range(ops_num)]
         order = Order(
             priority=1,
             order_id=self.unused_id,
             current_operation=0,
-            tr_count=[1] * 4,
+            tr_count=[1] * ops_num,
             operations=ops
         )
 
