@@ -1,7 +1,6 @@
 import sys
 import time
 import traceback
-from math import sin, cos
 
 from PyQt5 import QtGui
 from PyQt5.QtCore import *
@@ -9,8 +8,9 @@ from PyQt5.QtWidgets import *
 from spade import quit_spade
 
 import settings
+from common import Point
+from common import clip
 from agents import FactoryAgent
-
 
 COLORS = [
     # 17 undertones https://lospec.com/palette-list/17undertones
@@ -99,20 +99,31 @@ class Canvas(QLabel):
         self.tr_color = QtGui.QColor(COLORS[14])
         self.aside_color = QtGui.QColor(COLORS[2])
         self.bg_color = QtGui.QColor(COLORS[-2])
+        self.font_color = QtGui.QColor(COLORS[0])
 
-        pixmap = QtGui.QPixmap(self.width(),self.height())
+        pixmap = QtGui.QPixmap(self.width(), self.height())
         pixmap = pixmap.scaled(self.width(), self.height(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         pixmap.fill(self.bg_color)
         self.setPixmap(pixmap)
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         self.setAlignment(Qt.AlignCenter)
         self.setMinimumSize(10, 10)
+        self.zoom = 2.5
+        self.min_zoom, self.max_zoom = 0.5, 5.0
+        self.offset_x, self.offset_y = 0.0, 0.0
+
+        # Font
+        font = QtGui.QFont()
+        font.setBold(True)
+        font.setPointSize(40)
+        painter = QtGui.QPainter(self.pixmap())
+        painter.setFont(font)
 
         self.factory_agent = factory_agent
         self.agents = [QPoint(0, 0)]
 
     def resizeEvent(self, event) -> None:
-        pixmap = QtGui.QPixmap(self.width(),self.height())
+        pixmap = QtGui.QPixmap(self.width(), self.height())
         pixmap.fill(self.bg_color)
         pixmap = pixmap.scaled(self.width(), self.height(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.setPixmap(pixmap)
@@ -133,27 +144,38 @@ class Canvas(QLabel):
         p = painter.pen()
 
         # Draw set-aside
-        p.setWidth(12)
+        p.setWidth(round(12 * self.zoom))
         p.setColor(self.aside_color)
         painter.setPen(p)
         self.draw_point(self.factory_agent.factory_map[""], painter)
 
         # Draw GoMs
-        p.setColor(self.gom_color)
-        painter.setPen(p)
+
         for jid in self.factory_agent.factory_map:
             if jid != "":  # set-aside already drawn
+                p.setColor(self.gom_color)
+                painter.setPen(p)
+
                 pt = self.factory_agent.factory_map[jid]
                 self.draw_point(pt, painter)
 
+                p.setColor(self.font_color)  # TODO: optimize color swapping
+                painter.setPen(p)
+                self.draw_text(pt, 12, painter, 'GoM 101')
+
         # Draw TRs
-        p.setWidth(4)
-        p.setColor(self.tr_color)
-        painter.setPen(p)
+        p.setWidth(round(4 * self.zoom))
 
         for jid in self.factory_agent.tr_map:
+            p.setColor(self.tr_color)
+            painter.setPen(p)
+
             pt = self.factory_agent.tr_map[jid]
             self.draw_point(pt, painter)
+
+            p.setColor(self.font_color)  # TODO: optimize color swapping
+            painter.setPen(p)
+            self.draw_text(pt, 4, painter, jid)
 
         painter.end()
         self.update()
@@ -164,10 +186,30 @@ class Canvas(QLabel):
         """
 
         if point is not None:
-            x = round(self.width() / 2 + point.x)
-            y = round(self.height() / 2 - point.y)
+            x, y = self.translate_point(point)
             painter.drawPoint(x, y)
 
+    def draw_text(self, point: Point, bb_size: int, painter: QtGui.QPainter, text: str) -> None:
+        """
+        :param pt: Point on map in absolute units.
+        Draws `text` with `painter` relatively to `point`. (0, 0) is centered.
+        Text is rendered `bb_size` units under `point`.
+        """
+
+        if point is not None:
+            pt = Point(point.x, point.y - bb_size)
+            x, y = self.translate_point(pt)
+            painter.drawText(x - 50, y, 100, 100, Qt.AlignBaseline | Qt.AlignHCenter, text)
+
+    def translate_point(self, point: Point) -> (float, float):
+        """
+        :param point: Point on map in absolute units.
+        :return: Tuple of coordinates translated to position in pixels.
+        """
+
+        x = round(self.width() / 2 + (point.x - self.offset_x) * self.zoom)
+        y = round(self.height() / 2 - (point.y - self.offset_y) * self.zoom)
+        return x, y
 
 class MainWindow(QMainWindow):
 
@@ -202,6 +244,9 @@ class MainWindow(QMainWindow):
         self.timer.setInterval(100)
         self.timer.timeout.connect(self.recurring_timer)
         self.timer.start()
+
+        # Mouse events
+        self.last_x, self.last_y = None, None
 
     def progress_fn(self, flag) -> None:
         print(f"[progress_fn] {flag}")
@@ -246,6 +291,33 @@ class MainWindow(QMainWindow):
         self.thread_pool.start(worker)
 
     def recurring_timer(self) -> None:
+        self.canvas.draw_scene()
+
+    def mouseMoveEvent(self, e) -> None:
+        if self.last_x is None:  # First event.
+            self.last_x = e.x()
+            self.last_y = e.y()
+            return  # Ignore the first time.
+
+        # Move scene offset depending on zoom level
+        dx, dy = self.last_x - e.x(), self.last_y - e.y()
+        self.canvas.offset_x += dx / self.canvas.zoom
+        self.canvas.offset_y -= dy / self.canvas.zoom
+        # print(f'{dx}, {dy}')
+        self.canvas.draw_scene()
+
+        # Update the origin for next time.
+        self.last_x = e.x()
+        self.last_y = e.y()
+
+    def mouseReleaseEvent(self, e) -> None:
+        self.last_x = None
+        self.last_y = None
+
+
+    def wheelEvent(self, e) -> None:
+        nz = self.canvas.zoom + e.angleDelta().y() / 1200
+        self.canvas.zoom = clip(nz, self.canvas.min_zoom, self.canvas.max_zoom)
         self.canvas.draw_scene()
 
 
