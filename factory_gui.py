@@ -1,6 +1,7 @@
 import sys
 import time
 import traceback
+import re
 
 from PyQt5 import QtGui
 from PyQt5.QtCore import *
@@ -161,7 +162,15 @@ class Canvas(QLabel):
 
                 p.setColor(self.font_color)  # TODO: optimize color swapping
                 painter.setPen(p)
-                self.draw_text(pt, 12, painter, 'GoM 101')
+
+                name = ""
+                try:
+                    name = re.split("@", jid)[0]
+                except:
+                    print(f"JID Error. Bad JID: {jid}")
+                finally:
+                    self.draw_text(pt, 12, painter, f"{name.upper()}")
+
 
         # Draw TRs
         p.setWidth(round(4 * self.zoom))
@@ -175,7 +184,14 @@ class Canvas(QLabel):
 
             p.setColor(self.font_color)  # TODO: optimize color swapping
             painter.setPen(p)
-            self.draw_text(pt, 4, painter, jid)
+
+            name = ""
+            try:
+                name = re.split("@", jid)[0]
+            except:
+                print(f"JID Error. Bad JID: {jid}")
+            finally:
+                self.draw_text(pt, 4, painter, f"{name.upper()}")
 
         painter.end()
         self.update()
