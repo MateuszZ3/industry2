@@ -6,6 +6,10 @@ Python 3.8.2
 
 - `pip install -r requirements.txt`
 
+### Requirements
+
+- Serwer XMPP obsługujący autorejestrację (np. Prosody)
+
 ## Usage
 
 - `python factory_gui.py`
@@ -27,3 +31,4 @@ Python 3.8.2
 - [ ] FABRYKA:
     - [x] fabryka generuje zróżnicowane zamówienia
     - [ ] na gui reprezentować współpracujące try (jest lider [ten który ma zamówienie u TRa], zbierają się i wtedy zaczynają współpracę)
+    - [ ] Zoom jako pole w settings
