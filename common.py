@@ -46,3 +46,6 @@ class Point:
     @classmethod
     def create(cls: type, point: np.array):
         return cls(point[0], point[1])
+
+def clip(n, min_n, max_n):
+    return min(max(n, min_n), max_n)

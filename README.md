@@ -25,5 +25,5 @@ Python 3.8.2
     - [ ] menedżer ma lepiej przydzielać taski (zależnie od tego czy gom jest zajęty czy nie)
     - [ ] jeśli menadzer nie może przydzielić zadania, to niech się zatrzyma, a nie że spamuje
 - [ ] FABRYKA:
-    - [ ] fabryka generuje zróżnicowane zamówienia
+    - [x] fabryka generuje zróżnicowane zamówienia
     - [ ] na gui reprezentować współpracujące try (jest lider [ten który ma zamówienie u TRa], zbierają się i wtedy zaczynają współpracę)
