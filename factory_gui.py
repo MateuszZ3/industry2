@@ -109,8 +109,8 @@ class Canvas(QLabel):
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         self.setAlignment(Qt.AlignCenter)
         self.setMinimumSize(10, 10)
-        self.zoom = 2.5
-        self.min_zoom, self.max_zoom = 0.5, 5.0
+        self.zoom = settings.ZOOM_DEFAULT
+        self.min_zoom, self.max_zoom = settings.ZOOM_MIN, settings.ZOOM_MAX
         self.offset_x, self.offset_y = 0.0, 0.0
 
         # Font

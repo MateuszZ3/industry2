@@ -31,4 +31,5 @@ Python 3.8.2
 - [ ] FABRYKA:
     - [x] fabryka generuje zróżnicowane zamówienia
     - [ ] na gui reprezentować współpracujące try (jest lider [ten który ma zamówienie u TRa], zbierają się i wtedy zaczynają współpracę)
-    - [ ] Zoom jako pole w settings
+    - [x] Zoom jako pole w settings
+    - [ ] Więcej informacji o GOM/TR po kliknięciu
