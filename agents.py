@@ -301,9 +301,9 @@ class Manager(Agent):
         async def run(self):
             while not self.agent.orders or not self.agent.free_goms:  # service an order if possible
                 await sleep(settings.MANAGER_LOOP_TIMEOUT)
-            i = random.randrange(len(self.agent.free_goms))  # select a free gom to pass an order to
-            gom: GoMInfo = self.agent.free_goms.pop(i)
-            self.agent.pending_goms[gom.jid] = gom
+            gom: GoMInfo = random.choice(list(self.agent.free_goms.values))  # select a free gom to pass an order to
+            self.agent.free_goms.pop(gom.jid)
+            # self.agent.pending_goms[gom.jid] = gom
             gom.status = GoMStatus.PENDING
 
             order: Order = heappop(self.agent.orders)
@@ -341,9 +341,9 @@ class Manager(Agent):
 
         async def run(self):  # todo specify when does it occur
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
-            gom: GoMInfo = self.agent.pending_goms[str(msg.sender)]
+            gom: GoMInfo = self.agent.gom_infos[str(msg.sender)]
             gom.status = GoMStatus.REFUSED
-            self.agent.pending_goms.pop(gom.jid)
+            # self.agent.pending_goms.pop(gom.jid)
             oid = msg.thread
             active_order: ActiveOrder = self.agent.active_orders[oid]
             heappush(self.agent.orders, active_order.order)
@@ -353,10 +353,10 @@ class Manager(Agent):
 
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
-            gom: GoMInfo = self.agent.pending_goms[str(msg.sender)]
+            gom: GoMInfo = self.agent.gom_infos[str(msg.sender)]
             gom.status = GoMStatus.BUSY
-            self.agent.working_goms[gom.jid] = gom
-            self.agent.pending_goms.pop(gom.jid)
+            # self.agent.working_goms[gom.jid] = gom
+            # self.agent.pending_goms.pop(gom.jid)
             print('agree received for order ' + msg.thread)
 
     class OrderDoneHandler(CyclicBehaviour):
@@ -364,9 +364,11 @@ class Manager(Agent):
 
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
-            gom: GoMInfo = self.agent.working_goms[str(msg.sender)]
+            gom: GoMInfo = self.agent.gom_infos[str(msg.sender)]
             gom.status = GoMStatus.FREE
-            self.agent.working_goms.pop(gom.jid)
+            # self.agent.working_goms.pop(gom.jid)
+            self.agent.free_goms[gom.jid] = gom
+
             oid = msg.thread
             active_order: ActiveOrder = self.agent.active_orders[oid]
             active_order.advance(gom.jid)
@@ -379,16 +381,25 @@ class Manager(Agent):
                 report.thread = oid
                 await self.send(report)
 
+    class MalfunctionHandler(CyclicBehaviour):
+        """Failure from GoM"""
+
+        async def run(self):
+            msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
+            print('Received malfunction notice:')
+            print(msg)
+
+
     def __init__(self, factory_jid: str, gom_infos, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.gom_infos: List[GoMInfo] = []  # all goms
-        self.free_goms: List[GoMInfo] = []  # goms that can take an order
+        self.gom_infos: Dict[str, GoMInfo] = {}  # all goms
+        self.free_goms: Dict[str, GoMInfo] = {}  # goms that can take an order
         for gom_jid, operations in gom_infos:
             gom = GoMInfo(jid=gom_jid, machines=[Machine(operation=op) for op in operations])
-            self.gom_infos.append(gom)
-            self.free_goms.append(gom)
-        self.pending_goms: Dict[str, GoMInfo] = {}  # goms currently pending reply
-        self.working_goms: Dict[str, GoMInfo] = {}  # goms working on an order
+            self.gom_infos[gom_jid] = gom
+            self.free_goms[gom_jid] = gom
+        # self.pending_goms: Dict[str, GoMInfo] = {}  # goms currently pending reply
+        # self.working_goms: Dict[str, GoMInfo] = {}  # goms working on an order
         self.orders: List[Order] = []  # all orders accepted from factory
         self.active_orders: Dict[str, Order] = {}  # orders in progress; todo zamiana na PQ, tylko z (prio, id)
         self.factory_jid: str = factory_jid
@@ -398,6 +409,7 @@ class Manager(Agent):
         self.ref_handler = self.OrderRefuseHandler()
         self.agr_handler = self.OrderAgreeHandler()
         self.done_handler = self.OrderDoneHandler()
+        self.malfunction_handler = self.MalfunctionHandler()
 
     async def setup(self):
         print("Manager starting . . .")
@@ -414,18 +426,23 @@ class Manager(Agent):
         done_temp = Template()
         done_temp.metadata = {"performative": "inform"}
         self.add_behaviour(self.done_handler, done_temp)
+        malfunction_temp = Template()
+        done_temp.metadata = {"performative": "failure"}
+        self.add_behaviour(self.malfunction_handler, malfunction_temp)
         self.add_behaviour(self.main_loop)
 
-    def process_reply(self, sender: str, status: GoMStatus):
-        gom: GoMInfo = self.pending_goms[sender]
-        gom.status = status
-        self.pending_goms.pop(sender)
-
-    def process_finish(self, sender: str):
-        gom: GoMInfo = self.working_goms[sender]
-        gom.status = GoMStatus.FREE
-        self.free_goms.append(gom)
-        self.pending_goms.pop(sender)
+    # def process_reply(self, sender: str, status: GoMStatus):
+    #     # gom: GoMInfo = self.pending_goms[sender]
+    #     gom: GoMInfo = self.gom_infos[sender]
+    #     gom.status = status
+    #     # self.pending_goms.pop(sender)
+    #
+    # def process_finish(self, sender: str):
+    #     # gom: GoMInfo = self.working_goms[sender]
+    #     gom: GoMInfo = self.gom_infos[sender]
+    #     gom.status = GoMStatus.FREE
+    #     # self.free_goms.append(gom)
+    #     # self.pending_goms.pop(sender)
 
 
 class GroupOfMachinesAgent(Agent):
