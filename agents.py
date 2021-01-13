@@ -301,7 +301,7 @@ class Manager(Agent):
         async def run(self):
             while not self.agent.orders or not self.agent.free_goms:  # service an order if possible
                 await sleep(settings.MANAGER_LOOP_TIMEOUT)
-            gom: GoMInfo = random.choice(list(self.agent.free_goms.values))  # select a free gom to pass an order to
+            gom: GoMInfo = random.choice(list(self.agent.free_goms.values()))  # select a free gom to pass an order to
             self.agent.free_goms.pop(gom.jid)
             # self.agent.pending_goms[gom.jid] = gom
             gom.status = GoMStatus.PENDING
