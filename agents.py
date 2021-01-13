@@ -341,9 +341,9 @@ class Manager(Agent):
 
         async def run(self):  # todo specify when does it occur
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
-            gom: GoMInfo = self.agent.pending_goms[msg.sender]
+            gom: GoMInfo = self.agent.pending_goms[str(msg.sender)]
             gom.status = GoMStatus.REFUSED
-            self.agent.pending_goms.pop(msg.sender)
+            self.agent.pending_goms.pop(gom.jid)
             oid = msg.thread
             active_order: ActiveOrder = self.agent.active_orders[oid]
             heappush(self.agent.orders, active_order.order)
@@ -353,10 +353,10 @@ class Manager(Agent):
 
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
-            gom: GoMInfo = self.agent.pending_goms[msg.sender]
+            gom: GoMInfo = self.agent.pending_goms[str(msg.sender)]
             gom.status = GoMStatus.BUSY
             self.agent.working_goms[gom.jid] = gom
-            self.agent.pending_goms.pop(msg.sender)
+            self.agent.pending_goms.pop(gom.jid)
             print('agree received for order ' + msg.thread)
 
     class OrderDoneHandler(CyclicBehaviour):
@@ -364,12 +364,12 @@ class Manager(Agent):
 
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
-            gom: GoMInfo = self.agent.pending_goms[msg.sender]
-            gom.status = GoMStatus.REFUSED
-            self.agent.working_goms.pop(msg.sender)
+            gom: GoMInfo = self.agent.working_goms[str(msg.sender)]
+            gom.status = GoMStatus.FREE
+            self.agent.working_goms.pop(gom.jid)
             oid = msg.thread
             active_order: ActiveOrder = self.agent.active_orders[oid]
-            active_order.advance(str(msg.sender))
+            active_order.advance(gom.jid)
             if not active_order.order.is_done():
                 heappush(self.agent.orders, active_order.order)
             else:
