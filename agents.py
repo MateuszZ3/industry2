@@ -387,6 +387,9 @@ class Manager(Agent):
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
             key = str(msg.sender)
+            if key == 'factory@localhost':
+                print('Failure notice received from the factory.')  # todo why
+                return
             gom: GoMInfo = self.agent.gom_infos[key]
             gom.status = GoMStatus.OUT_OF_ORDER
             # todo repaired
