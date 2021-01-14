@@ -375,7 +375,7 @@ class Manager(Agent):
             if not active_order.order.is_done():
                 heappush(self.agent.orders, active_order.order)
             else:
-                self.agent.active_orders[oid] = None
+                self.agent.active_orders.pop(oid)
                 report = Message(self.agent.factory_jid)
                 report.set_metadata("performative", "inform")
                 report.thread = oid
@@ -386,6 +386,10 @@ class Manager(Agent):
 
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
+            key = str(msg.sender)
+            gom: GoMInfo = self.agent.gom_infos[key]
+            gom.status = GoMStatus.OUT_OF_ORDER
+            # todo repaired
             print('Received malfunction notice:')
             print(msg)
 
