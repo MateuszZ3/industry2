@@ -434,7 +434,7 @@ class Manager(Agent):
         done_temp.metadata = {"performative": "inform"}
         self.add_behaviour(self.done_handler, done_temp)
         malfunction_temp = Template()
-        done_temp.metadata = {"performative": "failure"}
+        malfunction_temp.metadata = {"performative": "failure"}
         self.add_behaviour(self.malfunction_handler, malfunction_temp)
         self.add_behaviour(self.main_loop)
 
