@@ -114,10 +114,10 @@ class Canvas(QLabel):
         self.aside_color = QtGui.QColor(COLORS[2])
         self.bg_color = QtGui.QColor(COLORS[-2])
         self.font_color = QtGui.QColor(COLORS[0])
-        self.connection_color = QtGui.QColor(COLORS[-3])
+        self.connection_color = QtGui.QColor(COLORS[11])
         self.connection_color.setAlphaF(0.2)
-        self.connection_hover_color = QtGui.QColor(COLORS[-3])
-        self.connection_hover_color.setAlphaF(0.75)
+        self.connection_hover_color = QtGui.QColor(COLORS[11])
+        self.connection_hover_color.setAlphaF(0.9)
 
         pixmap = QtGui.QPixmap(self.width(), self.height())
         pixmap = pixmap.scaled(self.width(), self.height(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
@@ -196,15 +196,17 @@ class Canvas(QLabel):
                     self.draw_text(pt, 12, painter, f"{name.upper()}")
 
         # Draw TR connections
-        p.setWidthF(round(1 * self.zoom))
+
 
         for jid in self.factory_view_model.tr_list:
             master = self.factory_view_model.tr_list[jid]
             # TODO: Handle hover
-            # if self.selected_tr_jid == jid:
-            #     p.setColor(self.connection_hover_color)
-            # else:
-            p.setColor(self.connection_color)
+            if self.factory_view_model.selected_tr_jid == jid:
+                p.setWidthF(round(1.25 * self.zoom))
+                p.setColor(self.connection_hover_color)
+            else:
+                p.setWidthF(round(0.75 * self.zoom))
+                p.setColor(self.connection_color)
             painter.setPen(p)
 
             # Get coordinates for master-TR
@@ -292,7 +294,9 @@ class Canvas(QLabel):
         :return: Point on map in absolute units.
         """
 
-        return Point(0, 0)
+        nx = self.offset_x + (x - (self.width() / 2)) / self.zoom
+        ny = self.offset_y - (y - (self.height() / 2)) / self.zoom
+        return Point(nx, ny)
 
     def mouseMoveEvent(self, e) -> None:
         # Try to select a TR
@@ -308,7 +312,6 @@ class Canvas(QLabel):
         dx, dy = self.last_x - e.x(), self.last_y - e.y()
         self.offset_x += dx / self.zoom
         self.offset_y -= dy / self.zoom
-        # print(f'{dx}, {dy}')
         self.draw_scene()
 
         # Update the origin for next time.
@@ -325,14 +328,12 @@ class Canvas(QLabel):
         self.draw_scene()
 
     def handle_hover(self, x, y) -> bool:
-        # print(f'Hover: {x} {y}')
-        self.selected_tr_jid = None
-
-        pt = Point(x, y)
+        abs_pos = self.absolute_position(x, y)
+        self.factory_view_model.selected_tr_jid = None
 
         for jid in self.factory_view_model.tr_map:
-            if self.in_radius(self.factory_view_model.tr_map[jid], pt, self.hover_radius):
-                self.selected_tr_jid = jid
+            if self.in_radius(self.factory_view_model.tr_map[jid], abs_pos, self.hover_radius):
+                self.factory_view_model.selected_tr_jid = jid
                 return True
 
         return False
