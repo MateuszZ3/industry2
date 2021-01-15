@@ -114,6 +114,8 @@ class FactoryAgent(Agent):
 
             # Send data to worker
             self.agent.perform_view_model_update()
+            # Start periodically updating positions
+            self.agent.add_behaviour(self.agent.position_updater)
 
             # Create and start Manager agent
             manager = Manager(factory_jid=str(self.agent.jid), gom_infos=gom_infos, jid=self.agent.manager_jid,
@@ -181,7 +183,16 @@ class FactoryAgent(Agent):
                 tr_jid = str(msg.sender)
                 pos = Point.from_json(msg.body)
                 self.agent.tr_map[tr_jid] = pos
-                self.agent.update_tr_position.emit(tr_jid, pos)  # TODO: Add timer to update all TR positions
+                # Note: Positions are updated in bulk by PositionUpdater behaviour.
+                # self.agent.update_tr_position.emit(tr_jid, pos)
+
+    class PositionUpdater(PeriodicBehaviour):
+        """
+
+        """
+        async def run(self):
+            tr_map_copy = deepcopy(self.agent.tr_map)
+            self.agent.update_view_model.emit(None, tr_map_copy, None)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -217,6 +228,7 @@ class FactoryAgent(Agent):
         self.fail_handler = self.OrderFailureHandler()
         self.done_handler = self.OrderDoneHandler()
         self.position_handler = self.PositionHandler()
+        self.position_updater = self.PositionUpdater(0.25)
 
     async def setup(self):
         print(f"TickerAgent started at {datetime.datetime.now().time()}")

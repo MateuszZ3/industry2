@@ -35,5 +35,5 @@ Python 3.8.2
     - [ ] Więcej informacji o GOM/TR po kliknięciu
     - [x] Jakiś viewmodel czy coś
     - [ ] tr_list deepcopy
-    - [ ] TickerBehav do apdejtowania wszystkich pozycji naraz
+    - [x] TickerBehav do apdejtowania wszystkich pozycji naraz
     - [ ] Hover
