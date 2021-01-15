@@ -307,18 +307,19 @@ class Manager(Agent):
             gom.status = GoMStatus.PENDING
 
             order: Order = heappop(self.agent.orders)
-            print(order)  # todo remove
+            # print(order)  # todo remove
             oid = str(order.order_id)
             if oid not in self.agent.active_orders:
                 self.agent.active_orders[oid] = ActiveOrder(order, '')
             else:
-                print(f'Error: This order ({order}) has already been received.')
+                pass
+                # print(f'Error: This order ({order}) has already been received.')  # this is fine
             payload = GoMOrder.create(order, self.agent.active_orders[oid].location)
             msg = Message(to=gom.jid)
             msg.set_metadata("performative", "request")
             msg.body = payload.to_json()
             msg.thread = oid
-            print(f'manager send: {msg}')
+            print(f'Manager sent: {msg}')
             await self.send(msg)
 
         async def on_end(self):
@@ -330,7 +331,7 @@ class Manager(Agent):
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
             order = Order.from_json(msg.body)
-            print(order)  # todo remove
+            # print(order)  # todo remove
             heappush(self.agent.orders, order)
             reply = Message(self.agent.factory_jid)
             reply.set_metadata("performative", "agree")
@@ -357,7 +358,7 @@ class Manager(Agent):
             gom.status = GoMStatus.BUSY
             # self.agent.working_goms[gom.jid] = gom
             # self.agent.pending_goms.pop(gom.jid)
-            print('agree received for order ' + msg.thread)
+            print(f'Agree received for order {msg.thread} from {msg.sender}.')
 
     class OrderDoneHandler(CyclicBehaviour):
         """Inform from GoM"""
@@ -372,6 +373,8 @@ class Manager(Agent):
             oid = msg.thread
             active_order: ActiveOrder = self.agent.active_orders[oid]
             active_order.advance(gom.jid)
+            print(f'{msg.sender} has completed a stage of order{oid}.')
+            print(self.agent.free_goms.keys())
             if not active_order.order.is_done():
                 heappush(self.agent.orders, active_order.order)
             else:
@@ -379,6 +382,7 @@ class Manager(Agent):
                 report = Message(self.agent.factory_jid)
                 report.set_metadata("performative", "inform")
                 report.thread = oid
+                print('It was the final stage.')
                 await self.send(report)
 
     class MalfunctionHandler(CyclicBehaviour):
