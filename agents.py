@@ -1,4 +1,5 @@
 import asyncio
+from copy import deepcopy
 import datetime
 import random
 from asyncio import sleep
@@ -106,9 +107,13 @@ class FactoryAgent(Agent):
                 tr = TransportRobotAgent(position=self.agent.tr_map[tr_jid], gom_jid=gom_jid,
                                          factory_jid=str(self.agent.jid), factory_map=self.agent.factory_map,
                                          jid=tr_jid, password=settings.PASSWORD)
+                self.agent.tr_list[tr_jid] = tr
                 await tr.start()
                 print(f'tr started tr_jid={tr_jid}')
                 await asyncio.sleep(settings.AGENT_CREATION_SLEEP)  # Wait around 100ms for registration to complete
+
+            # Send data to worker
+            self.agent.perform_view_model_update()
 
             # Create and start Manager agent
             manager = Manager(factory_jid=str(self.agent.jid), gom_infos=gom_infos, jid=self.agent.manager_jid,
@@ -176,7 +181,7 @@ class FactoryAgent(Agent):
                 tr_jid = str(msg.sender)
                 pos = Point.from_json(msg.body)
                 self.agent.tr_map[tr_jid] = pos
-                # self.agent.update_callback.emit(True)
+                self.agent.update_tr_position.emit(tr_jid, pos)  # TODO: Add timer to update all TR positions
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -186,7 +191,9 @@ class FactoryAgent(Agent):
         self.order_factory = OrderFactory()
         self.order_behav = None
 
-        self.update_callback = None  # Callback used for updating GUI.
+        # Callbacks used for updating GUI.
+        self.update_tr_position = None
+        self.update_view_model = None
 
         # GoM IDs start with 1, so that 0 can be used as set-aside's ID
         self.gom_count = 12
@@ -196,6 +203,7 @@ class FactoryAgent(Agent):
             '': Point(x=-128.0, y=0.0)
         }
         self.tr_map = {}
+        self.tr_list = {}
 
         # JIDs
         self.manager_jid = f"{settings.AGENT_NAMES['manager']}@{settings.HOST}"
@@ -212,8 +220,10 @@ class FactoryAgent(Agent):
 
     async def setup(self):
         print(f"TickerAgent started at {datetime.datetime.now().time()}")
-        if self.update_callback is None:
-            raise Exception("update_callback not set")
+        if self.update_tr_position is None:
+            raise Exception("update_tr_position not set")
+        if self.update_view_model is None:
+            raise Exception("update_view_model not set")
 
         # Behaviours
         self.add_behaviour(self.start_behaviour)
@@ -244,13 +254,16 @@ class FactoryAgent(Agent):
 
         self.add_behaviour(self.StartAgents())
 
-    def set_update_callback(self, callback) -> None:
+    def set_update_callbacks(self, update_tr_pos_callback, update_view_model_callback) -> None:
         """
-        Sets callback used for updating GUI.
+        Sets callbacks used for updating GUI.
 
-        :param callback: callback
+        :param update_tr_pos_callback:
+        :param update_view_model_callback:
         """
-        self.update_callback = callback
+
+        self.update_tr_position = update_tr_pos_callback
+        self.update_view_model = update_view_model_callback
 
     def prepare(self):
         """
@@ -277,6 +290,13 @@ class FactoryAgent(Agent):
             self.tr_map[tr_jid] = Point(x=x + xo, y=y + yo)
 
         return jids
+
+    def perform_view_model_update(self):
+        tr_map_copy = deepcopy(self.tr_map)
+        tr_list_copy = self.tr_list  # TODO: Create custom copy-er
+        factory_map_copy = deepcopy(self.factory_map)
+        # Note that each param can be None. In that case it won't be updated.
+        self.update_view_model.emit(tr_list_copy, tr_map_copy, factory_map_copy)
 
 
 class Manager(Agent):
@@ -520,6 +540,7 @@ class TransportRobotAgent(Agent):
         self.order = None  # from mother gom
         self.msg_order = None  # from mother gom
         self.loaded_order = None
+        self.coworkers = ['tr-2@localhost']  # TODO: self.coworkers = []
 
     class MoveBehaviour(PeriodicBehaviour):
         """

@@ -35,3 +35,5 @@ TR_TICK_DURATION = 0.1  # s
 ZOOM_MIN = 0.5
 ZOOM_MAX = 5.0
 ZOOM_DEFAULT = 2.5
+
+HOVER_RADIUS = 10  # px with zoom=1.0

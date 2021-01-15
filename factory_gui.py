@@ -2,6 +2,7 @@ import sys
 import time
 import traceback
 import re
+from copy import deepcopy
 
 from PyQt5 import QtGui
 from PyQt5.QtCore import *
@@ -21,6 +22,15 @@ COLORS = [
 ]
 
 
+class ViewModel:
+    def __init__(self):
+        self.selected_tr_jid = None
+
+        self.tr_list = {}  # Deepcopy before sending
+        self.tr_map = {}  # Deepcopy before sending
+        self.factory_map = {}  # it dont matter but copy
+
+
 class WorkerSignals(QObject):
     """
     Defines the signals available from a running worker thread.
@@ -36,14 +46,16 @@ class WorkerSignals(QObject):
     result
         `object` data returned from processing, anything
 
-    progress
-        `bool` indicating whether to redraw scene
+    tr_position_update
+        `str` tr_jid
+        `object` Point
 
     """
     finished = pyqtSignal()
     error = pyqtSignal(tuple)
     result = pyqtSignal(object)
-    progress = pyqtSignal(bool)
+    update_tr_position = pyqtSignal(str, object)
+    update_view_model = pyqtSignal(object, object, object)
 
 
 class Worker(QRunnable):
@@ -70,7 +82,8 @@ class Worker(QRunnable):
         self.signals = WorkerSignals()
 
         # Add the callback to our kwargs
-        self.kwargs['update_callback'] = self.signals.progress
+        self.kwargs['update_tr_position_callback'] = self.signals.update_tr_position
+        self.kwargs['update_view_model_callback'] = self.signals.update_view_model
 
     @pyqtSlot()
     def run(self):
@@ -93,7 +106,7 @@ class Worker(QRunnable):
 
 class Canvas(QLabel):
 
-    def __init__(self, factory_agent):
+    def __init__(self, view_model):
         super().__init__()
         # Color definitions
         self.gom_color = QtGui.QColor(COLORS[3])
@@ -101,6 +114,10 @@ class Canvas(QLabel):
         self.aside_color = QtGui.QColor(COLORS[2])
         self.bg_color = QtGui.QColor(COLORS[-2])
         self.font_color = QtGui.QColor(COLORS[0])
+        self.connection_color = QtGui.QColor(COLORS[-3])
+        self.connection_color.setAlphaF(0.2)
+        self.connection_hover_color = QtGui.QColor(COLORS[-3])
+        self.connection_hover_color.setAlphaF(0.75)
 
         pixmap = QtGui.QPixmap(self.width(), self.height())
         pixmap = pixmap.scaled(self.width(), self.height(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
@@ -120,8 +137,15 @@ class Canvas(QLabel):
         painter = QtGui.QPainter(self.pixmap())
         painter.setFont(font)
 
-        self.factory_agent = factory_agent
-        self.agents = [QPoint(0, 0)]
+        self.factory_view_model = view_model
+
+        # Mouse events
+        self.last_x, self.last_y = None, None
+        self.hover_radius = settings.HOVER_RADIUS
+
+        # self.setMouseTracking(True)
+        # self.setCursor(Qt.ClosedHandCursor)
+        # self.setCursor(Qt.PointingHandCursor)  # On moving
 
     def resizeEvent(self, event) -> None:
         pixmap = QtGui.QPixmap(self.width(), self.height())
@@ -145,19 +169,19 @@ class Canvas(QLabel):
         p = painter.pen()
 
         # Draw set-aside
-        p.setWidth(round(12 * self.zoom))
+        p.setWidthF(round(12 * self.zoom))
         p.setColor(self.aside_color)
         painter.setPen(p)
-        self.draw_point(self.factory_agent.factory_map[""], painter)
+        if "" in self.factory_view_model.factory_map:
+            self.draw_point(self.factory_view_model.factory_map[""], painter)
 
         # Draw GoMs
-
-        for jid in self.factory_agent.factory_map:
+        for jid in self.factory_view_model.factory_map:
             if jid != "":  # set-aside already drawn
                 p.setColor(self.gom_color)
                 painter.setPen(p)
 
-                pt = self.factory_agent.factory_map[jid]
+                pt = self.factory_view_model.factory_map[jid]
                 self.draw_point(pt, painter)
 
                 p.setColor(self.font_color)  # TODO: optimize color swapping
@@ -171,15 +195,37 @@ class Canvas(QLabel):
                 finally:
                     self.draw_text(pt, 12, painter, f"{name.upper()}")
 
+        # Draw TR connections
+        p.setWidthF(round(1 * self.zoom))
+
+        for jid in self.factory_view_model.tr_list:
+            master = self.factory_view_model.tr_list[jid]
+            # TODO: Handle hover
+            # if self.selected_tr_jid == jid:
+            #     p.setColor(self.connection_hover_color)
+            # else:
+            p.setColor(self.connection_color)
+            painter.setPen(p)
+
+            # Get coordinates for master-TR
+            pt = self.factory_view_model.tr_map[jid]
+
+            # TODO: Make sure `master.coworkers` doesn't change while drawing,
+            #       aka enable copying tr_list.
+            # Get coordinates for coworkers
+            for coworker_jid in master.coworkers:
+                coworker_pt = self.factory_view_model.tr_map[coworker_jid]
+                # Draw connection
+                self.draw_line(pt, coworker_pt, painter)
 
         # Draw TRs
-        p.setWidth(round(4 * self.zoom))
+        p.setWidthF(round(4 * self.zoom))
 
-        for jid in self.factory_agent.tr_map:
+        for jid in self.factory_view_model.tr_map:
             p.setColor(self.tr_color)
             painter.setPen(p)
 
-            pt = self.factory_agent.tr_map[jid]
+            pt = self.factory_view_model.tr_map[jid]
             self.draw_point(pt, painter)
 
             p.setColor(self.font_color)  # TODO: optimize color swapping
@@ -188,15 +234,16 @@ class Canvas(QLabel):
             name = ""
             try:
                 name = re.split("@", jid)[0]
-            except:
+            except Exception as e:
                 print(f"JID Error. Bad JID: {jid}")
+                print(repr(e))
             finally:
                 self.draw_text(pt, 4, painter, f"{name.upper()}")
 
         painter.end()
         self.update()
 
-    def draw_point(self, point, painter) -> None:
+    def draw_point(self, point: Point, painter: QtGui.QPainter) -> None:
         """
         Draws point with painter. (0, 0) is centered.
         """
@@ -204,6 +251,16 @@ class Canvas(QLabel):
         if point is not None:
             x, y = self.translate_point(point)
             painter.drawPoint(x, y)
+
+    def draw_line(self, p1: Point, p2: Point, painter: QtGui.QPainter) -> None:
+        """
+        Draws line from p1 to p2 with painter. (0, 0) is centered.
+        """
+
+        if p1 is not None and p2 is not None:
+            x1, y1 = self.translate_point(p1)
+            x2, y2 = self.translate_point(p2)
+            painter.drawLine(x1, y1, x2, y2)
 
     def draw_text(self, point: Point, bb_size: int, painter: QtGui.QPainter, text: str) -> None:
         """
@@ -227,18 +284,104 @@ class Canvas(QLabel):
         y = round(self.height() / 2 - (point.y - self.offset_y) * self.zoom)
         return x, y
 
+    def absolute_position(self, x: float, y: float) -> Point:
+        """
+        Translates pixel position to absolute position.
+        :param x: Pixel X position.
+        :param y: Pixel Y position.
+        :return: Point on map in absolute units.
+        """
+
+        return Point(0, 0)
+
+    def mouseMoveEvent(self, e) -> None:
+        # Try to select a TR
+        self.handle_hover(e.x(), e.y())
+
+        if self.last_x is None:  # First event.
+            self.last_x = e.x()
+            self.last_y = e.y()
+
+            return  # Ignore the first time.
+
+        # Move scene offset depending on zoom level
+        dx, dy = self.last_x - e.x(), self.last_y - e.y()
+        self.offset_x += dx / self.zoom
+        self.offset_y -= dy / self.zoom
+        # print(f'{dx}, {dy}')
+        self.draw_scene()
+
+        # Update the origin for next time.
+        self.last_x = e.x()
+        self.last_y = e.y()
+
+    def mouseReleaseEvent(self, e) -> None:
+        self.last_x = None
+        self.last_y = None
+
+    def wheelEvent(self, e) -> None:
+        nz = self.zoom + e.angleDelta().y() / 1200
+        self.zoom = clip(nz, self.min_zoom, self.max_zoom)
+        self.draw_scene()
+
+    def handle_hover(self, x, y) -> bool:
+        # print(f'Hover: {x} {y}')
+        self.selected_tr_jid = None
+
+        pt = Point(x, y)
+
+        for jid in self.factory_view_model.tr_map:
+            if self.in_radius(self.factory_view_model.tr_map[jid], pt, self.hover_radius):
+                self.selected_tr_jid = jid
+                return True
+
+        return False
+
+    def in_radius(self, origin: Point, pt: Point, radius: float) -> bool:
+        """
+        Checks whether pt is in radius from origin.
+
+        :return: True, when pt is in radius, otherwise - False.
+        """
+
+        dx = pt.x - origin.x
+        dy = pt.y - origin.y
+        return (dx * dx + dy * dy) <= radius * radius
+
+
 class MainWindow(QMainWindow):
+    """
+    Start's up a FactoryWorker, which in turn starts a FactoryAgent and then all other agents. FactoryWorker updates
+    ViewModel from which MainWindow (Canvas) then reads data.
+    """
 
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
 
         # Agent
         self.factory_agent = FactoryAgent(f"{settings.AGENT_NAMES['factory']}@{settings.HOST}", settings.PASSWORD)
+        self.factory_worker = None
+        self.view_model = ViewModel()
 
+        # UI
+        self.init_ui()
+
+        # Multithreading
+        self.thread_pool = QThreadPool()
+        print("Multithreading with maximum %d threads" % self.thread_pool.maxThreadCount())
+
+        # Redraw scene every 100ms
+        self.timer = QTimer()
+        self.timer.setInterval(100)
+        self.timer.timeout.connect(self.recurring_timer)
+        self.timer.start()
+
+    def init_ui(self):
+        self.setWindowTitle("Industry 4.0")
         # Layout
         layout = QVBoxLayout()
 
-        self.canvas = Canvas(self.factory_agent)
+        self.canvas = Canvas(self.view_model)
         b = QPushButton("Start worker")
         b.pressed.connect(self.start_agent_worker)
 
@@ -251,25 +394,34 @@ class MainWindow(QMainWindow):
 
         self.show()
 
-        # Multithreading
-        self.thread_pool = QThreadPool()
-        print("Multithreading with maximum %d threads" % self.thread_pool.maxThreadCount())
+    def update_tr_position_fn(self, tr_jid: str, pos) -> None:
+        """
 
-        # Redraw scene every 100ms
-        self.timer = QTimer()
-        self.timer.setInterval(100)
-        self.timer.timeout.connect(self.recurring_timer)
-        self.timer.start()
+        :param tr_jid:
+        :param pos:
+        :return:
+        """
+        self.view_model.tr_map[tr_jid] = pos
 
-        # Mouse events
-        self.last_x, self.last_y = None, None
+    def update_view_model_fn(self, tr_list, tr_map, factory_map):
+        """
 
-    def progress_fn(self, flag) -> None:
-        print(f"[progress_fn] {flag}")
+        :param tr_list:
+        :param tr_map:
+        :param factory_map:
+        :return:
+        """
 
-    def execute_agent(self, update_callback):
+        if tr_list:
+            self.view_model.tr_list = tr_list
+        if tr_map:
+            self.view_model.tr_map = tr_map
+        if factory_map:
+            self.view_model.factory_map = factory_map
+
+    def execute_agent(self, update_tr_position_callback, update_view_model_callback):
         agent = self.factory_agent
-        agent.set_update_callback(update_callback)
+        agent.set_update_callbacks(update_tr_position_callback, update_view_model_callback)
         future = agent.start()
         future.result()
 
@@ -297,46 +449,27 @@ class MainWindow(QMainWindow):
         """
         Binds defined signals, then starts factory agent in separate thread.
         """
-        # Pass the function to execute
-        worker = Worker(self.execute_agent)  # Any other args, kwargs are passed to the run function
-        worker.signals.result.connect(self.process_result)
-        worker.signals.finished.connect(self.thread_complete)
-        worker.signals.progress.connect(self.progress_fn)
+        try:
+            # Pass the function to execute
+            self.factory_worker = Worker(self.execute_agent)  # Any other args, kwargs are passed to the run function
+            self.factory_worker.signals.result.connect(self.process_result)
+            self.factory_worker.signals.finished.connect(self.thread_complete)
+            self.factory_worker.signals.update_tr_position.connect(self.update_tr_position_fn)
+            self.factory_worker.signals.update_view_model.connect(self.update_view_model_fn)
 
-        # Execute
-        self.thread_pool.start(worker)
+            # Execute
+            self.thread_pool.start(self.factory_worker)
+        except Exception as e:
+            print(repr(e))
 
     def recurring_timer(self) -> None:
         self.canvas.draw_scene()
 
-    def mouseMoveEvent(self, e) -> None:
-        if self.last_x is None:  # First event.
-            self.last_x = e.x()
-            self.last_y = e.y()
-            return  # Ignore the first time.
 
-        # Move scene offset depending on zoom level
-        dx, dy = self.last_x - e.x(), self.last_y - e.y()
-        self.canvas.offset_x += dx / self.canvas.zoom
-        self.canvas.offset_y -= dy / self.canvas.zoom
-        # print(f'{dx}, {dy}')
-        self.canvas.draw_scene()
+if __name__ == '__main__':
+    app = QApplication([])
+    window = MainWindow()
 
-        # Update the origin for next time.
-        self.last_x = e.x()
-        self.last_y = e.y()
-
-    def mouseReleaseEvent(self, e) -> None:
-        self.last_x = None
-        self.last_y = None
-
-
-    def wheelEvent(self, e) -> None:
-        nz = self.canvas.zoom + e.angleDelta().y() / 1200
-        self.canvas.zoom = clip(nz, self.canvas.min_zoom, self.canvas.max_zoom)
-        self.canvas.draw_scene()
-
-
-app = QApplication([])
-window = MainWindow()
-app.exec_()
+    # app.exec()  # TODO
+    app.exec_()
+    # sys.exit(app.exec_())

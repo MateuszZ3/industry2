@@ -33,3 +33,7 @@ Python 3.8.2
     - [ ] na gui reprezentować współpracujące try (jest lider [ten który ma zamówienie u TRa], zbierają się i wtedy zaczynają współpracę)
     - [x] Zoom jako pole w settings
     - [ ] Więcej informacji o GOM/TR po kliknięciu
+    - [x] Jakiś viewmodel czy coś
+    - [ ] tr_list deepcopy
+    - [ ] TickerBehav do apdejtowania wszystkich pozycji naraz
+    - [ ] Hover
