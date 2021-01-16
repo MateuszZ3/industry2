@@ -283,8 +283,8 @@ class FactoryAgent(Agent):
             xo = random.gauss(0, spray_diameter)
             yo = random.gauss(0, spray_diameter)
 
-            self.factory_map[gom_jid] = Point(x=x, y=y)
-            self.tr_map[tr_jid] = Point(x=x + xo, y=y + yo)
+            self.factory_map[gom_jid] = Point(x=float(x), y=float(y))
+            self.tr_map[tr_jid] = Point(x=float(x + xo), y=float(y + yo))
 
         return jids
 
@@ -514,7 +514,6 @@ class GroupOfMachinesAgent(Agent):
 
         :param msg: received message
         :param recv: calling behaviour
-        TODO: Co znaczy agree w tym wypadku? Nic, zbierania wiadomosci tego typu z kolejki agenta
         """
 
         assert msg is not None
@@ -525,15 +524,10 @@ class GroupOfMachinesAgent(Agent):
 
         :param msg: received message
         :param recv: calling behaviour
-        TODO: Co znaczy inform w tym wypadku? TR dostarczyl zamowienie wiec zaczyna prace.
         """
 
         assert msg is not None
-
         self.add_behaviour(self.WorkBehaviour())
-        reply = self.msg_order.make_reply()
-        reply.set_metadata('performative', 'inform')
-        await recv.send(reply)
 
     async def handle_manager_request(self, msg, recv):
         """
@@ -541,7 +535,6 @@ class GroupOfMachinesAgent(Agent):
 
         :param msg: received message
         :param recv: calling behaviour
-        TODO: Co znaczy request w tym wypadku? Jak moze przyjac zamowienie to akceptuje -> zamawia transport -> pracuje
         """
 
         reply = msg.make_reply()
