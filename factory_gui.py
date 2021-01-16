@@ -2,7 +2,6 @@ import sys
 import time
 import traceback
 import re
-from copy import deepcopy
 
 from PyQt5 import QtGui
 from PyQt5.QtCore import *
@@ -31,7 +30,7 @@ class ViewModel:
         """
         self.tr_list = {}  # Deepcopy before sending
         self.tr_map = {}  # Deepcopy before sending
-        self.factory_map = {}  # it dont matter but copy
+        self.factory_map = {}  # it don't matter but copy
 
         self._selected_tr_jid = None
 
@@ -112,10 +111,7 @@ class Worker(QRunnable):
 
     @pyqtSlot()
     def run(self):
-        """
-        Initialise the runner function with passed args, kwargs.
-        """
-
+        """Initialise the runner function with passed args, kwargs."""
         # Retrieve args/kwargs here; and fire processing using them
         try:
             result = self.fn(*self.args, **self.kwargs)
@@ -130,9 +126,10 @@ class Worker(QRunnable):
 
 
 class Canvas(QLabel):
-
+    """Canvas representing factory map."""
     def __init__(self, view_model):
         super().__init__()
+
         # Color definitions
         self.gom_color = QtGui.QColor(COLORS[3])
         self.tr_color = QtGui.QColor(COLORS[14])
@@ -179,10 +176,7 @@ class Canvas(QLabel):
         self.setPixmap(pixmap)
 
     def clear_scene(self) -> None:
-        """
-        Clears scene.
-        """
-
+        """Clears scene."""
         pixmap = self.pixmap()
         pixmap.fill(QtGui.QColor(COLORS[-2]))
         self.update()
@@ -299,76 +293,69 @@ class Canvas(QLabel):
         self.draw_scene()
 
     def handle_hover(self, x, y) -> bool:
-        abs_pos = self.absolute_position(x, y)
-        self.factory_view_model.select_tr(None)
+        abs_pos = self.translate_window_to_map(x, y)
 
         for jid in self.factory_view_model.tr_map:
             if self.in_radius(self.factory_view_model.tr_map[jid], abs_pos, self.hover_radius):
                 self.factory_view_model.select_tr(jid)
                 return True
 
+        self.factory_view_model.select_tr(None)
         return False
 
     def draw_point(self, point: Point, painter: QtGui.QPainter) -> None:
-        """
-        Draws point with painter. (0, 0) is centered.
-        """
-
+        """Draws point with painter. (0, 0) is centered."""
         if point is not None:
-            x, y = self.translate_point(point)
+            x, y = self.translate_map_to_window(point)
             painter.drawPoint(x, y)
 
     def draw_line(self, p1: Point, p2: Point, painter: QtGui.QPainter) -> None:
-        """
-        Draws line from p1 to p2 with painter. (0, 0) is centered.
-        """
-
+        """Draws line from p1 to p2 with painter. (0, 0) is centered."""
         if p1 is not None and p2 is not None:
-            x1, y1 = self.translate_point(p1)
-            x2, y2 = self.translate_point(p2)
+            x1, y1 = self.translate_map_to_window(p1)
+            x2, y2 = self.translate_map_to_window(p2)
             painter.drawLine(x1, y1, x2, y2)
 
     def draw_text(self, point: Point, bb_size: int, painter: QtGui.QPainter, text: str) -> None:
         """
-        :param pt: Point on map in absolute units.
         Draws `text` with `painter` relatively to `point`. (0, 0) is centered.
         Text is rendered `bb_size` units under `point`.
-        """
 
+        :param point: Point on map in absolute units.
+        :param bb_size: Bounding box size. Essentially margin.
+        :param painter: Painter.
+        :param text: Text content.
+        """
         if point is not None:
             pt = Point(point.x, point.y - bb_size)
-            x, y = self.translate_point(pt)
+            x, y = self.translate_map_to_window(pt)
             painter.drawText(x - 50, y, 100, 100, Qt.AlignBaseline | Qt.AlignHCenter, text)
 
-    def translate_point(self, point: Point) -> (float, float):
+    def translate_map_to_window(self, point: Point) -> (float, float):
         """
+        Translates point from map coordinates to window coordinates (pixels).
+
         :param point: Point on map in absolute units.
         :return: Tuple of coordinates translated to position in pixels.
         """
-
         x = round(self.width() / 2 + (point.x - self.offset_x) * self.zoom)
         y = round(self.height() / 2 - (point.y - self.offset_y) * self.zoom)
         return x, y
 
-    def absolute_position(self, x: float, y: float) -> Point:
+    def translate_window_to_map(self, x: float, y: float) -> Point:
         """
-        Translates pixel position to absolute position.
+        Translates point from window coordinates (pixels) to position on map.
+
         :param x: Pixel X position.
         :param y: Pixel Y position.
         :return: Point on map in absolute units.
         """
-
         nx = self.offset_x + (x - (self.width() / 2)) / self.zoom
         ny = self.offset_y - (y - (self.height() / 2)) / self.zoom
         return Point(nx, ny)
 
     def in_radius(self, origin: Point, pt: Point, radius: float) -> bool:
-        """
-        Checks whether pt is in radius from origin.
-
-        :return: True, when pt is in radius, otherwise - False.
-        """
-
+        """Returns whether pt is in radius from origin."""
         dx = pt.x - origin.x
         dy = pt.y - origin.y
         return (dx * dx + dy * dy) <= radius * radius
@@ -389,6 +376,7 @@ class MainWindow(QMainWindow):
         self.view_model = ViewModel(self.set_description_text)
 
         # UI
+        self.canvas = None
         self._description = None
         self.init_ui()
 
@@ -441,7 +429,6 @@ class MainWindow(QMainWindow):
 
         :param tr_jid:
         :param pos:
-        :return:
         """
         self.view_model.tr_map[tr_jid] = pos
 
@@ -451,9 +438,7 @@ class MainWindow(QMainWindow):
         :param tr_list:
         :param tr_map:
         :param factory_map:
-        :return:
         """
-
         if tr_list:
             self.view_model.tr_list = tr_list
         if tr_map:
@@ -488,9 +473,7 @@ class MainWindow(QMainWindow):
         print("THREAD COMPLETE!")
 
     def start_agent_worker(self) -> None:
-        """
-        Binds defined signals, then starts factory agent in separate thread.
-        """
+        """Binds defined signals, then starts factory agent in separate thread."""
         try:
             # Pass the function to execute
             self.factory_worker = Worker(self.execute_agent)  # Any other args, kwargs are passed to the run function
