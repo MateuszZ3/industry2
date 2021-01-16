@@ -23,12 +23,37 @@ COLORS = [
 
 
 class ViewModel:
-    def __init__(self):
-        self.selected_tr_jid = None
+    def __init__(self, set_description_text_callback):
+        """
+        Factory view model. Holds all necessary data.
 
+        :param set_description_text_callback: Callback to be used after setting description text.
+        """
         self.tr_list = {}  # Deepcopy before sending
         self.tr_map = {}  # Deepcopy before sending
         self.factory_map = {}  # it dont matter but copy
+
+        self._selected_tr_jid = None
+
+        self._description_text = ""
+        self._set_description_text_callback = set_description_text_callback
+
+    def set_description_text(self, text: str) -> None:
+        """Sets text content of description widget."""
+        self._set_description_text_callback(text)
+
+    def select_tr(self, jid) -> None:
+        """Handles selection of TR with given JID."""
+        if jid == "":
+            self._selected_tr_jid = None
+            self.set_description_text("")
+        else:
+            self._selected_tr_jid = jid
+            self.set_description_text(jid)
+
+    def get_selected_tr_jid(self):
+        """Returns currently selected TR agent JID."""
+        return self._selected_tr_jid
 
 
 class WorkerSignals(QObject):
@@ -190,18 +215,17 @@ class Canvas(QLabel):
                 name = ""
                 try:
                     name = re.split("@", jid)[0]
-                except:
+                except Exception as e:
                     print(f"JID Error. Bad JID: {jid}")
+                    print(repr(e))
                 finally:
                     self.draw_text(pt, 12, painter, f"{name.upper()}")
 
         # Draw TR connections
-
-
         for jid in self.factory_view_model.tr_list:
             master = self.factory_view_model.tr_list[jid]
             # TODO: Handle hover
-            if self.factory_view_model.selected_tr_jid == jid:
+            if self.factory_view_model.get_selected_tr_jid() == jid:
                 p.setWidthF(round(1.25 * self.zoom))
                 p.setColor(self.connection_hover_color)
             else:
@@ -244,6 +268,46 @@ class Canvas(QLabel):
 
         painter.end()
         self.update()
+
+    def mouseMoveEvent(self, e) -> None:
+        # Try to select a TR
+        self.handle_hover(e.x(), e.y())
+
+        if self.last_x is None:  # First event.
+            self.last_x = e.x()
+            self.last_y = e.y()
+
+            return  # Ignore the first time.
+
+        # Move scene offset depending on zoom level
+        dx, dy = self.last_x - e.x(), self.last_y - e.y()
+        self.offset_x += dx / self.zoom
+        self.offset_y -= dy / self.zoom
+        self.draw_scene()
+
+        # Update the origin for next time.
+        self.last_x = e.x()
+        self.last_y = e.y()
+
+    def mouseReleaseEvent(self, e) -> None:
+        self.last_x = None
+        self.last_y = None
+
+    def wheelEvent(self, e) -> None:
+        nz = self.zoom + e.angleDelta().y() / 1200
+        self.zoom = clip(nz, self.min_zoom, self.max_zoom)
+        self.draw_scene()
+
+    def handle_hover(self, x, y) -> bool:
+        abs_pos = self.absolute_position(x, y)
+        self.factory_view_model.select_tr(None)
+
+        for jid in self.factory_view_model.tr_map:
+            if self.in_radius(self.factory_view_model.tr_map[jid], abs_pos, self.hover_radius):
+                self.factory_view_model.select_tr(jid)
+                return True
+
+        return False
 
     def draw_point(self, point: Point, painter: QtGui.QPainter) -> None:
         """
@@ -298,46 +362,6 @@ class Canvas(QLabel):
         ny = self.offset_y - (y - (self.height() / 2)) / self.zoom
         return Point(nx, ny)
 
-    def mouseMoveEvent(self, e) -> None:
-        # Try to select a TR
-        self.handle_hover(e.x(), e.y())
-
-        if self.last_x is None:  # First event.
-            self.last_x = e.x()
-            self.last_y = e.y()
-
-            return  # Ignore the first time.
-
-        # Move scene offset depending on zoom level
-        dx, dy = self.last_x - e.x(), self.last_y - e.y()
-        self.offset_x += dx / self.zoom
-        self.offset_y -= dy / self.zoom
-        self.draw_scene()
-
-        # Update the origin for next time.
-        self.last_x = e.x()
-        self.last_y = e.y()
-
-    def mouseReleaseEvent(self, e) -> None:
-        self.last_x = None
-        self.last_y = None
-
-    def wheelEvent(self, e) -> None:
-        nz = self.zoom + e.angleDelta().y() / 1200
-        self.zoom = clip(nz, self.min_zoom, self.max_zoom)
-        self.draw_scene()
-
-    def handle_hover(self, x, y) -> bool:
-        abs_pos = self.absolute_position(x, y)
-        self.factory_view_model.selected_tr_jid = None
-
-        for jid in self.factory_view_model.tr_map:
-            if self.in_radius(self.factory_view_model.tr_map[jid], abs_pos, self.hover_radius):
-                self.factory_view_model.selected_tr_jid = jid
-                return True
-
-        return False
-
     def in_radius(self, origin: Point, pt: Point, radius: float) -> bool:
         """
         Checks whether pt is in radius from origin.
@@ -362,9 +386,10 @@ class MainWindow(QMainWindow):
         # Agent
         self.factory_agent = FactoryAgent(f"{settings.AGENT_NAMES['factory']}@{settings.HOST}", settings.PASSWORD)
         self.factory_worker = None
-        self.view_model = ViewModel()
+        self.view_model = ViewModel(self.set_description_text)
 
         # UI
+        self._description = None
         self.init_ui()
 
         # Multithreading
@@ -375,25 +400,41 @@ class MainWindow(QMainWindow):
         self.timer = QTimer()
         self.timer.setInterval(100)
         self.timer.timeout.connect(self.recurring_timer)
+
+        # Start
+        self.show()
         self.timer.start()
 
     def init_ui(self):
         self.setWindowTitle("Industry 4.0")
-        # Layout
-        layout = QVBoxLayout()
 
+        # Layout
+        main_layout = QHBoxLayout()
+        side_layout = QVBoxLayout()
+
+        # Controls
         self.canvas = Canvas(self.view_model)
+        main_layout.addWidget(self.canvas)
+
         b = QPushButton("Start worker")
         b.pressed.connect(self.start_agent_worker)
+        b.setFixedWidth(300)
+        side_layout.addWidget(b)
 
-        layout.addWidget(self.canvas)
-        layout.addWidget(b)
+        self._description = QLabel()
+        self._description.setFixedWidth(300)
+        self._description.setAlignment(Qt.AlignTop)
+        side_layout.addWidget(self._description)
+        self.view_model.set_description_text("click on the map to\nhide this agent placeholder\na bad description")
+
+        main_layout.addLayout(side_layout, 100)
 
         w = QWidget()
-        w.setLayout(layout)
+        w.setLayout(main_layout)
         self.setCentralWidget(w)
 
-        self.show()
+    def set_description_text(self, text: str) -> None:
+        self._description.setText(text)
 
     def update_tr_position_fn(self, tr_jid: str, pos) -> None:
         """
