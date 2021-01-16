@@ -175,12 +175,6 @@ class Canvas(QLabel):
         pixmap = pixmap.scaled(self.width(), self.height(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.setPixmap(pixmap)
 
-    def clear_scene(self) -> None:
-        """Clears scene."""
-        pixmap = self.pixmap()
-        pixmap.fill(QtGui.QColor(COLORS[-2]))
-        self.update()
-
     def draw_scene(self) -> None:
         # TODO remove first position in gom_positions and tr_positions, use factory_map
         self.clear_scene()
@@ -261,6 +255,12 @@ class Canvas(QLabel):
                 self.draw_text(pt, 4, painter, f"{name.upper()}")
 
         painter.end()
+        self.update()
+
+    def clear_scene(self) -> None:
+        """Clears scene."""
+        pixmap = self.pixmap()
+        pixmap.fill(QtGui.QColor(COLORS[-2]))
         self.update()
 
     def mouseMoveEvent(self, e) -> None:
@@ -378,6 +378,7 @@ class MainWindow(QMainWindow):
         # UI
         self.canvas = None
         self._description = None
+        self._start_btn = None
         self.init_ui()
 
         # Multithreading
@@ -404,10 +405,10 @@ class MainWindow(QMainWindow):
         self.canvas = Canvas(self.view_model)
         main_layout.addWidget(self.canvas)
 
-        b = QPushButton("Start worker")
-        b.pressed.connect(self.start_agent_worker)
-        b.setFixedWidth(300)
-        side_layout.addWidget(b)
+        self._start_btn = QPushButton("Start worker")
+        self._start_btn.pressed.connect(self.start_agent_worker)
+        self._start_btn.setFixedWidth(300)
+        side_layout.addWidget(self._start_btn)
 
         self._description = QLabel()
         self._description.setFixedWidth(300)
@@ -471,6 +472,7 @@ class MainWindow(QMainWindow):
 
     def thread_complete(self) -> None:
         print("THREAD COMPLETE!")
+        self._start_btn.setEnabled(True)
 
     def start_agent_worker(self) -> None:
         """Binds defined signals, then starts factory agent in separate thread."""
@@ -484,6 +486,7 @@ class MainWindow(QMainWindow):
 
             # Execute
             self.thread_pool.start(self.factory_worker)
+            self._start_btn.setEnabled(False)
         except Exception as e:
             print(repr(e))
 
