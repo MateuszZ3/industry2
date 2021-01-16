@@ -348,6 +348,7 @@ class Manager(Agent):
             oid = msg.thread
             active_order: ActiveOrder = self.agent.active_orders[oid]
             heappush(self.agent.orders, active_order.order)
+            print(f'{gom.jid} refused to process order{oid}.')
 
     class OrderAgreeHandler(CyclicBehaviour):
         """Agree from GoM"""
