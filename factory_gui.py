@@ -227,10 +227,13 @@ class Canvas(QLabel):
             # TODO: Make sure `master.coworkers` doesn't change while drawing,
             #       aka enable copying tr_list.
             # Get coordinates for coworkers
-            for coworker_jid in master.coworkers:
-                coworker_pt = self.factory_view_model.tr_map[coworker_jid]
-                # Draw connection
-                self.draw_line(pt, coworker_pt, painter)
+            try:
+                for coworker_jid in master.coworkers:
+                    coworker_pt = self.factory_view_model.tr_map[coworker_jid]
+                    # Draw connection
+                    self.draw_line(pt, coworker_pt, painter)
+            except Exception as e:
+                print(repr(e))
 
         # Draw TRs
         p.setWidthF(round(4 * self.zoom))
