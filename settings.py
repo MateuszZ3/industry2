@@ -36,4 +36,4 @@ ZOOM_MIN = 0.5
 ZOOM_MAX = 5.0
 ZOOM_DEFAULT = 2.5
 
-HOVER_RADIUS = 10  # px with zoom=1.0
+SELECT_RADIUS = 10  # px with zoom=1.0

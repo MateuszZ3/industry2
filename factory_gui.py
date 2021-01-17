@@ -138,8 +138,8 @@ class Canvas(QLabel):
         self.font_color = QtGui.QColor(COLORS[0])
         self.connection_color = QtGui.QColor(COLORS[11])
         self.connection_color.setAlphaF(0.2)
-        self.connection_hover_color = QtGui.QColor(COLORS[11])
-        self.connection_hover_color.setAlphaF(0.9)
+        self.connection_selected_color = QtGui.QColor(COLORS[11])
+        self.connection_selected_color.setAlphaF(0.9)
 
         pixmap = QtGui.QPixmap(self.width(), self.height())
         pixmap = pixmap.scaled(self.width(), self.height(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
@@ -163,11 +163,11 @@ class Canvas(QLabel):
 
         # Mouse events
         self.last_x, self.last_y = None, None
-        self.hover_radius = settings.HOVER_RADIUS
+        self.select_radius = settings.SELECT_RADIUS
+        self.mouse_down = False
 
-        # self.setMouseTracking(True)
-        # self.setCursor(Qt.ClosedHandCursor)
-        # self.setCursor(Qt.PointingHandCursor)  # On moving
+        self.setMouseTracking(True)
+        self.setCursor(Qt.PointingHandCursor)
 
     def resizeEvent(self, event) -> None:
         pixmap = QtGui.QPixmap(self.width(), self.height())
@@ -212,10 +212,10 @@ class Canvas(QLabel):
         # Draw TR connections
         for jid in self.factory_view_model.tr_list:
             master = self.factory_view_model.tr_list[jid]
-            # TODO: Handle hover
+
             if self.factory_view_model.get_selected_tr_jid() == jid:
                 p.setWidthF(round(1.25 * self.zoom))
-                p.setColor(self.connection_hover_color)
+                p.setColor(self.connection_selected_color)
             else:
                 p.setWidthF(round(0.75 * self.zoom))
                 p.setColor(self.connection_color)
@@ -263,15 +263,15 @@ class Canvas(QLabel):
         pixmap.fill(QtGui.QColor(COLORS[-2]))
         self.update()
 
-    def mouseMoveEvent(self, e) -> None:
-        # Try to select a TR
-        self.handle_hover(e.x(), e.y())
-
-        if self.last_x is None:  # First event.
+    def mouseMoveEvent(self, e: QtGui.QMouseEvent) -> None:
+        if self.last_x is None and self.mouse_down is True:  # First event.
             self.last_x = e.x()
             self.last_y = e.y()
 
             return  # Ignore the first time.
+
+        if self.mouse_down is False:
+            return
 
         # Move scene offset depending on zoom level
         dx, dy = self.last_x - e.x(), self.last_y - e.y()
@@ -283,20 +283,30 @@ class Canvas(QLabel):
         self.last_x = e.x()
         self.last_y = e.y()
 
-    def mouseReleaseEvent(self, e) -> None:
+    def mousePressEvent(self, e: QtGui.QMouseEvent):
+        self.mouse_down = True
+        self.setCursor(Qt.ClosedHandCursor)
+
+        # Try to select a TR
+        if e.buttons() == Qt.LeftButton:
+            self.attempt_select(e.x(), e.y())
+
+    def mouseReleaseEvent(self, e: QtGui.QMouseEvent) -> None:
         self.last_x = None
         self.last_y = None
+        self.mouse_down = False
+        self.setCursor(Qt.PointingHandCursor)
 
     def wheelEvent(self, e) -> None:
         nz = self.zoom + e.angleDelta().y() / 1200
         self.zoom = clip(nz, self.min_zoom, self.max_zoom)
         self.draw_scene()
 
-    def handle_hover(self, x, y) -> bool:
+    def attempt_select(self, x, y) -> bool:
         abs_pos = self.translate_window_to_map(x, y)
 
         for jid in self.factory_view_model.tr_map:
-            if self.in_radius(self.factory_view_model.tr_map[jid], abs_pos, self.hover_radius):
+            if self.in_radius(self.factory_view_model.tr_map[jid], abs_pos, self.select_radius):
                 self.factory_view_model.select_tr(jid)
                 return True
 
