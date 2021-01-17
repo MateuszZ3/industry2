@@ -574,16 +574,14 @@ class TransportRobotAgent(Agent):
             await self.after_handler(self)
 
     class DecideBehaviour(PeriodicBehaviour):
+        def __init__(self, decide, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.decide = decide
+        
         async def run(self):
             if self.agent.idle:
                 self.agent.idle = self.decide()
     
-        def decide(self):
-            if self.agent.order is not None:
-                self.agent.get_order()
-                return False
-            return True
-
     def move(self, destination):
         """
         Moves TR
@@ -683,6 +681,12 @@ class TransportRobotAgent(Agent):
     def help(self, sender, order):
         return True
     
+    def decide(self):
+        if self.order is not None:
+            self.get_order()
+            return False
+        return True
+        
     async def handle_tr_agree(self, msg, recv):
         pass
 
@@ -708,7 +712,7 @@ class TransportRobotAgent(Agent):
             template=Template(sender=self.gom_jid, metadata={'performative': 'request'})
         )
         self.add_behaviour(
-            behaviour=self.DecideBehaviour(settings.TR_DECIDE_TIMEOUT)
+            behaviour=self.DecideBehaviour(self.decide, period=settings.TR_DECIDE_TIMEOUT)
         )
 
         # TR communication
