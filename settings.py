@@ -11,21 +11,21 @@ AGENT_NAMES = {
 }
 PASSWORD = "password"
 TR_SPEED = 10  # px/s
-OP_DURATIONS = {
-    Operation.DRILL: 1000,
-    Operation.MILL: 1500,
-    Operation.FURNACE: 2100,
-    Operation.PRINT: 1600,
-    Operation.PELLET: 1000,
-    Operation.SHAPE: 1100,
-    Operation.PRESS: 1700,
-    Operation.INJECT: 1500,
-    Operation.MOULD: 1800,
-    Operation.SHAVE: 1200,
-    Operation.CNC: 1900,
-    Operation.GRIND: 2000,
-    Operation.CUT_GLASS: 1300,
-    Operation.LASER_MARK: 1400
+OP_DURATIONS = {  # s
+    Operation.DRILL: 1.,
+    Operation.MILL: 1.5,
+    Operation.FURNACE: 2.1,
+    Operation.PRINT: 1.6,
+    Operation.PELLET: 1.,
+    Operation.SHAPE: 1.1,
+    Operation.PRESS: 1.7,
+    Operation.INJECT: 1.5,
+    Operation.MOULD: 1.8,
+    Operation.SHAVE: 1.2,
+    Operation.CNC: 1.9,
+    Operation.GRIND: 2.,
+    Operation.CUT_GLASS: 1.3,
+    Operation.LASER_MARK: 1.4,
 }
 RECEIVE_TIMEOUT = 15 * 60  # s
 MANAGER_LOOP_TIMEOUT = 0.1  # s
