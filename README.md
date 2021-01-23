@@ -34,6 +34,6 @@ Python 3.8.2
     - [x] Zoom jako pole w settings
     - [x] Jakiś viewmodel czy coś
     - [x] TickerBehav do apdejtowania wszystkich pozycji naraz
-    - [ ] Więcej informacji o GOM/TR po kliknięciu
+    - [x] Więcej informacji o GOM/TR po kliknięciu
       - [x] `kliknięcie_handle`
-      - [ ] `tr_list` deepcopy
+      - [x] `tr_list` deepcopy

@@ -1,6 +1,7 @@
 import asyncio
 from copy import deepcopy
 import datetime
+import json
 import random
 from asyncio import sleep
 from collections import defaultdict
@@ -118,6 +119,7 @@ class FactoryAgent(Agent):
             self.agent.perform_view_model_update()
             # Start periodically updating positions
             self.agent.add_behaviour(self.agent.position_updater)
+            self.agent.add_behaviour(self.agent.tr_list_updater)
 
             # Create and start Manager agent
             manager = Manager(factory_jid=str(self.agent.jid), gom_infos=gom_infos, jid=self.agent.manager_jid,
@@ -189,12 +191,18 @@ class FactoryAgent(Agent):
                 # self.agent.update_tr_position.emit(tr_jid, pos)
 
     class PositionUpdater(PeriodicBehaviour):
-        """
-
-        """
+        """Periodically updates TR positions."""
         async def run(self):
             tr_map_copy = deepcopy(self.agent.tr_map)
             self.agent.update_view_model.emit(None, tr_map_copy, None)
+
+    class TRListUpdater(PeriodicBehaviour):
+        """Periodically updates TR list."""
+        async def run(self):
+            # Filter TR data before copying
+            tr_list_tmp = {k: TransportRobotAgent.filter(v.__dict__) for k, v in self.agent.tr_list.items()}
+            tr_list_copy = deepcopy(tr_list_tmp)
+            self.agent.update_view_model.emit(tr_list_copy, None, None)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -230,7 +238,8 @@ class FactoryAgent(Agent):
         self.fail_handler = self.OrderFailureHandler()
         self.done_handler = self.OrderDoneHandler()
         self.position_handler = self.PositionHandler()
-        self.position_updater = self.PositionUpdater(0.25)
+        self.position_updater = self.PositionUpdater(settings.TR_POSITION_UPDATE_PERIOD)
+        self.tr_list_updater = self.TRListUpdater(settings.TR_LIST_UPDATE_PERIOD)
 
     async def setup(self):
         print(f"TickerAgent started at {datetime.datetime.now().time()}")
@@ -306,9 +315,13 @@ class FactoryAgent(Agent):
         return jids
 
     def perform_view_model_update(self):
+        # Filter TR data before copying
+        tr_list_tmp = {k: TransportRobotAgent.filter(v.__dict__) for k,v in self.tr_list.items()}
+        tr_list_copy = deepcopy(tr_list_tmp)
+
         tr_map_copy = deepcopy(self.tr_map)
-        tr_list_copy = self.tr_list  # TODO: Create custom copy-er
         factory_map_copy = deepcopy(self.factory_map)
+
         # Note that each param can be None. In that case it won't be updated.
         self.update_view_model.emit(tr_list_copy, tr_map_copy, factory_map_copy)
 
@@ -553,7 +566,19 @@ class TransportRobotAgent(Agent):
         # TODO
         self.coworkers = ['tr-2@localhost']  # TODO: self.coworkers = []
         self.helping = {}
-        
+
+    # List of fields used when serializing.
+    serialized_fields = ['coworkers', 'factory_jid', 'gom_jid', 'helping', 'idle', 'jid', 'loaded_order', 'order']
+
+    def filter(d: dict) -> dict:
+        """
+        Filters a given dictionary by `serialized_fields`.
+
+        :param d: TR converted to a dictionary.
+        :return: Filtered dictionary.
+        """
+        return {k: v for (k, v) in d.items() if k in TransportRobotAgent.serialized_fields}
+
     class MoveBehaviour(PeriodicBehaviour):
         """
         Moves agent behaviour.

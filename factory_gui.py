@@ -43,16 +43,24 @@ class ViewModel:
 
     def select_tr(self, jid) -> None:
         """Handles selection of TR with given JID."""
-        if jid == "":
+        if jid is None:
             self._selected_tr_jid = None
             self.set_description_text("")
         else:
             self._selected_tr_jid = jid
-            self.set_description_text(jid)
+            self.set_description_text(self.describe(self.tr_list[jid]))
 
     def get_selected_tr_jid(self):
         """Returns currently selected TR agent JID."""
         return self._selected_tr_jid
+
+    def describe(self, tr: dict) -> str:
+        """Converts given TR to a description string."""
+        description = ""
+        for (k, v) in tr.items():
+            description += f'{k}: {v}\n'
+
+        return description
 
 
 class WorkerSignals(QObject):
@@ -228,7 +236,7 @@ class Canvas(QLabel):
             #       aka enable copying tr_list.
             # Get coordinates for coworkers
             try:
-                for coworker_jid in master.coworkers:
+                for coworker_jid in master['coworkers']:
                     coworker_pt = self.factory_view_model.tr_map[coworker_jid]
                     # Draw connection
                     self.draw_line(pt, coworker_pt, painter)
@@ -455,6 +463,7 @@ class MainWindow(QMainWindow):
         """
         if tr_list:
             self.view_model.tr_list = tr_list
+            self.view_model.select_tr(self.view_model.get_selected_tr_jid())  # Update description when model updates.
         if tr_map:
             self.view_model.tr_map = tr_map
         if factory_map:
