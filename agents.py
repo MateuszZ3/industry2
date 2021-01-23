@@ -104,10 +104,12 @@ class FactoryAgent(Agent):
                 await asyncio.sleep(settings.AGENT_CREATION_SLEEP)  # Wait around 100ms for registration to complete
 
                 # Create and start TR agent
+                tr_jids = [tr for (_, tr) in self.agent.jids if tr != tr_jid]
                 tr = TransportRobotAgent(position=self.agent.tr_map[tr_jid], gom_jid=gom_jid,
                                          factory_jid=str(self.agent.jid), factory_map=self.agent.factory_map,
-                                         jid=tr_jid, password=settings.PASSWORD)
+                                         tr_jids=tr_jids, jid=tr_jid, password=settings.PASSWORD)
                 self.agent.tr_list[tr_jid] = tr
+
                 await tr.start()
                 print(f'tr started tr_jid={tr_jid}')
                 await asyncio.sleep(settings.AGENT_CREATION_SLEEP)  # Wait around 100ms for registration to complete
@@ -536,17 +538,22 @@ class GroupOfMachinesAgent(Agent):
 
 
 class TransportRobotAgent(Agent):
-    def __init__(self, position, gom_jid, factory_jid, factory_map, *args, **kwargs):
+    def __init__(self, position, gom_jid, factory_jid, factory_map, tr_jids, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.idle = True
         self.position = position
         self.gom_jid = gom_jid
         self.factory_jid = factory_jid
         self.factory_map = factory_map
+        self.tr_jids = tr_jids
         self.order = None  # from mother gom
         self.msg_order = None  # from mother gom
         self.loaded_order = None
-        self.coworkers = ['tr-2@localhost']  # TODO: self.coworkers = []
 
+        # TODO
+        self.coworkers = ['tr-2@localhost']  # TODO: self.coworkers = []
+        self.helping = {}
+        
     class MoveBehaviour(PeriodicBehaviour):
         """
         Moves agent behaviour.
@@ -602,6 +609,15 @@ class TransportRobotAgent(Agent):
             await self.wait_behaviour.join()
             await self.after_handler(self)
 
+    class DecideBehaviour(PeriodicBehaviour):
+        def __init__(self, decide, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.decide = decide
+        
+        async def run(self):
+            if self.agent.idle:
+                self.agent.idle = self.decide()
+    
     def move(self, destination):
         """
         Moves TR
@@ -660,6 +676,7 @@ class TransportRobotAgent(Agent):
         self.loaded_order = None
         self.msg_order = None
         self.order = None
+        self.idle = True
 
     def get_order(self):
         """
@@ -686,10 +703,69 @@ class TransportRobotAgent(Agent):
         reply = self.msg_order.make_reply()
         reply.set_metadata('performative', 'agree')
         await recv.send(reply)
-        self.get_order()
+
+    async def handle_tr_request(self, msg, recv):
+        reply = msg.make_reply()
+        order = GoMOrder.from_json(msg.body)
+        if help(msg.sender, order):
+            self.helping[msg.sender] = (order, msg, datetime.datetime.now())
+            reply.set_metadata('performative', 'agree')
+        else:
+            reply.set_metadata('performative', 'refuse')
+        await recv.send(reply)
+
+    def help(self, sender, order):
+        return True
+    
+    def decide(self):
+        if self.order is not None:
+            self.get_order()
+            return False
+        return True
+        
+    async def handle_tr_agree(self, msg, recv):
+        pass
+
+    async def handle_tr_refuse(self, msg, recv):
+        pass
+
+    async def handle_tr_inform(self, msg, recv):
+        pass
+
+    def tr_template(self, **kwargs):
+        template_sum = None
+        for tr_jid in self.tr_jids:
+            template = Template(sender=tr_jid, **kwargs)
+            if template_sum is None:
+                template_sum = template
+            else:
+                template_sum = template_sum & template
+        return template_sum
 
     async def setup(self):
         self.add_behaviour(
             behaviour=RecvBehaviour(self.handle_gom_request),
-            template=Template(sender=self.gom_jid, metadata={"performative": "request"})
+            template=Template(sender=self.gom_jid, metadata={'performative': 'request'})
+        )
+        self.add_behaviour(
+            behaviour=self.DecideBehaviour(self.decide, period=settings.TR_DECIDE_TIMEOUT)
+        )
+
+        # TR communication
+        self.add_behaviour(
+            behaviour=RecvBehaviour(self.handle_tr_request),
+            template=self.tr_template(metadata={'performative': 'request'})
+        )
+        self.add_behaviour(
+            behaviour=RecvBehaviour(self.handle_tr_agree),
+            template=self.tr_template(metadata={'performative': 'agree'})
+        )
+        self.add_behaviour(
+            behaviour=RecvBehaviour(self.handle_tr_refuse),
+            template=self.tr_template(metadata={'performative': 'refuse'})
+        )
+
+        self.add_behaviour(
+            behaviour=RecvBehaviour(self.handle_tr_inform),
+            template=self.tr_template(metadata={'performative': 'inform'})
         )
