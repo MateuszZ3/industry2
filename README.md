@@ -6,6 +6,10 @@ Python 3.8.2
 
 - `pip install -r requirements.txt`
 
+### Requirements
+
+- Serwer XMPP obsługujący autorejestrację (np. Prosody)
+
 ## Usage
 
 - `python factory_gui.py`
@@ -26,4 +30,10 @@ Python 3.8.2
     - [ ] jeśli menadzer nie może przydzielić zadania, to niech się zatrzyma, a nie że spamuje
 - [ ] FABRYKA:
     - [x] fabryka generuje zróżnicowane zamówienia
-    - [ ] na gui reprezentować współpracujące try (jest lider [ten który ma zamówienie u TRa], zbierają się i wtedy zaczynają współpracę)
+    - [x] na gui reprezentować współpracujące try (jest lider [ten który ma zamówienie u TRa], zbierają się i wtedy zaczynają współpracę)
+    - [x] Zoom jako pole w settings
+    - [x] Jakiś viewmodel czy coś
+    - [x] TickerBehav do apdejtowania wszystkich pozycji naraz
+    - [ ] Więcej informacji o GOM/TR po kliknięciu
+      - [x] `kliknięcie_handle`
+      - [ ] `tr_list` deepcopy
