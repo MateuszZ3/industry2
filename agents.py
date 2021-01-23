@@ -4,7 +4,6 @@ import random
 from asyncio import sleep
 from collections import defaultdict
 from dataclasses import dataclass
-from enum import Enum
 from heapq import heappop, heappush
 from typing import Dict, List
 
@@ -388,7 +387,6 @@ class Manager(Agent):
                 print('Failure notice received from the factory.')
                 raise UserWarning
             gom: GoMInfo = self.agent.gom_infos[key]
-            # todo repaired
             print('Received malfunction notice:')
             print(msg)
 
