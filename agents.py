@@ -77,7 +77,7 @@ class OrderFactory:
             priority=1,
             order_id=self.unused_id,
             current_operation=0,
-            tr_count=[1] * ops_num,
+            tr_counts=[2] * ops_num,
             operations=ops
         )
 
@@ -236,7 +236,7 @@ class FactoryAgent(Agent):
         # Behaviours
         start_at = datetime.datetime.now() + datetime.timedelta(seconds=5)
         self.start_behaviour = self.StartAgents()
-        self.order_behav = self.OrderBehav(5.0, start_at)
+        self.order_behav = self.OrderBehav(120.0, start_at)
         self.agr_handler = self.OrderAgreeHandler()
         self.fail_handler = self.OrderFailureHandler()
         self.done_handler = self.OrderDoneHandler()
@@ -612,7 +612,7 @@ class LeaderBehaviour(FSMBehaviour):
     WAIT_FOR_HELPERS_DST_STATE = 'WAIT_FOR_HELPERS_DST_STATE'
 
     async def on_start(self):
-        pass
+        self.agent.sent_help_requests = False
 
     async def on_end(self):
         self.agent.idle = True
@@ -624,8 +624,7 @@ class LeaderBehaviour(FSMBehaviour):
     @classmethod
     def create(cls, agent):
         leader = cls()
-        leader.add_state(name=cls.FIND_HELPERS_STATE,
-                         state=FindHelpersState(), initial=True)
+        leader.add_state(name=cls.FIND_HELPERS_STATE, state=FindHelpersState(), initial=True)
 
         src = agent.factory_map[agent.order.location]
         leader.add_state(name=cls.MOVE_SRC_STATE,
@@ -649,21 +648,35 @@ class LeaderBehaviour(FSMBehaviour):
                                                    next_state=None,
                                                    home=True))
 
-        leader.add_rec_transition(
-            source=cls.FIND_HELPERS_STATE, dest=cls.MOVE_SRC_STATE)
-        leader.add_rec_transition(
-            source=cls.MOVE_SRC_STATE, dest=cls.WAIT_FOR_HELPERS_SRC_STATE)
-        leader.add_rec_transition(
-            source=cls.WAIT_FOR_HELPERS_SRC_STATE, dest=cls.MOVE_DST_STATE)
-        leader.add_rec_transition(
-            source=cls.MOVE_DST_STATE, dest=cls.WAIT_FOR_HELPERS_DST_STATE)
+        leader.add_rec_transition(source=cls.FIND_HELPERS_STATE, dest=cls.MOVE_SRC_STATE)
+        leader.add_rec_transition(source=cls.MOVE_SRC_STATE, dest=cls.WAIT_FOR_HELPERS_SRC_STATE)
+        leader.add_rec_transition(source=cls.WAIT_FOR_HELPERS_SRC_STATE, dest=cls.MOVE_DST_STATE)
+        leader.add_rec_transition(source=cls.MOVE_DST_STATE, dest=cls.WAIT_FOR_HELPERS_DST_STATE)
 
         return leader
 
 
 class FindHelpersState(State):
     async def run(self):
-        # TODO send and recive
+        # Send requests
+        if not self.agent.sent_help_requests:
+            payload = self.agent.order.to_json()
+
+            # Set receive templates first, so we don't miss any messages
+            self.agent.current_agree_temp = self.agent.tr_template(body=payload)
+            self.agent.current_refuse_temp = self.agent.tr_template(body=payload)
+
+            for tr_jid in self.agent.tr_jids:
+                msg = Message(to=tr_jid)
+                msg.set_metadata('performative', 'request')
+                msg.body = payload
+                await self.send(msg)
+                print(msg)
+
+            # Mark requests state as sent,
+            self.agent.sent_help_requests = True
+
+        # Check whether agent has enough helpers
         if len(self.agent.helpers) + 1 < self.agent.order.tr_count:
             self.set_next_state(LeaderBehaviour.FIND_HELPERS_STATE)
         else:
@@ -706,12 +719,15 @@ class TransportRobotAgent(Agent):
         self.loaded_order = None
 
         # TODO
-        self.coworkers = ['tr-2@localhost']  # TODO: self.coworkers = []
         self.helping = {}
+        self.sent_help_requests = False
+        self.current_agree_temp = None
+        self.current_refuse_temp = None
+        self.helpers = []
 
     # List of fields used when serializing.
-    serialized_fields = ['coworkers', 'factory_jid', 'gom_jid',
-                         'helping', 'idle', 'jid', 'loaded_order', 'order']
+    serialized_fields = ['factory_jid', 'gom_jid',
+                         'helping', 'helpers', 'idle', 'jid', 'loaded_order', 'order']
 
     def filter(d: dict) -> dict:
         """
@@ -888,15 +904,34 @@ class TransportRobotAgent(Agent):
 
     def decide(self):
         if self.order is not None:
-            self.get_order()
+            if self.order.tr_count > 1:
+                self.add_behaviour(LeaderBehaviour.create(self))
+            else:
+                self.get_order()
             return False
         return True
 
     async def handle_tr_agree(self, msg, recv):
-        pass
+        if self.current_agree_temp is not None and self.current_agree_temp.match(msg):
+            # Agree only if agent hasn't got enough helpers
+            reply = msg.make_reply()
+            if len(self.helpers) + 1 < self.order.tr_count:
+                self.helpers.append(msg.sender)
+                reply.set_metadata('performative', 'agree')
+                print(f'{self.jid}: AGREE {msg.sender} -> AGREE')
+            else:
+                reply.set_metadata('performative', 'refuse')
+                print(f'{self.jid}: AGREE {msg.sender} -> REFUSE')
+            await self.send(reply)
+        else:
+            # Message is not related to current requests as leader
+            return
 
     async def handle_tr_refuse(self, msg, recv):
-        pass
+        if self.current_refuse_temp is not None and self.current_refuse_temp.match(msg):
+            print(f'{self.jid}: REFUSE {msg.sender}')
+        else:
+            return
 
     async def handle_tr_inform(self, msg, recv):
         pass
@@ -927,14 +962,14 @@ class TransportRobotAgent(Agent):
         #    behaviour=RecvBehaviour(self.handle_tr_request),
         #    template=self.tr_template(metadata={'performative': 'request'})
         # )
-        # self.add_behaviour(
-        #    behaviour=RecvBehaviour(self.handle_tr_agree),
-        #    template=self.tr_template(metadata={'performative': 'agree'})
-        # )
-        # self.add_behaviour(
-        #    behaviour=RecvBehaviour(self.handle_tr_refuse),
-        #    template=self.tr_template(metadata={'performative': 'refuse'})
-        # )
+        self.add_behaviour(
+           behaviour=RecvBehaviour(self.handle_tr_agree),
+           template=self.tr_template(metadata={'performative': 'agree'})
+        )
+        self.add_behaviour(
+           behaviour=RecvBehaviour(self.handle_tr_refuse),
+           template=self.tr_template(metadata={'performative': 'refuse'})
+        )
 
         # self.add_behaviour(
         #    behaviour=RecvBehaviour(self.handle_tr_inform),
