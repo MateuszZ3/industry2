@@ -615,7 +615,7 @@ class LeaderBehaviour(FSMBehaviour):
         self.agent.sent_help_requests = False
 
     async def on_end(self):
-        self.agent.idle = True
+        self.agent.deliver_order(self)  #TODO: nie wiem czy taki arg???
 
     def add_rec_transition(self, source, dest):
         self.add_transition(source=source, dest=source)
@@ -922,7 +922,7 @@ class TransportRobotAgent(Agent):
             else:
                 reply.set_metadata('performative', 'refuse')
                 print(f'{self.jid}: AGREE {msg.sender} -> REFUSE')
-            await self.send(reply)
+            await recv.send(reply)
         else:
             # Message is not related to current requests as leader
             return
