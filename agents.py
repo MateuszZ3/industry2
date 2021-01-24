@@ -604,7 +604,7 @@ class GroupOfMachinesAgent(Agent):
         )
 
 
-class LiderBehaviour(FSMBehaviour):
+class LeaderBehaviour(FSMBehaviour):
     FIND_HELPERS_STATE = 'FIND_HELPERS_STATE'
     MOVE_SRC_STATE = 'MOVE_SRC_STATE'
     WAIT_FOR_HELPERS_SRC_STATE = 'WAIT_FOR_HELPERS_SRC_STATE'
@@ -623,51 +623,51 @@ class LiderBehaviour(FSMBehaviour):
 
     @classmethod
     def create(cls, agent):
-        lider = cls()
-        lider.add_state(name=cls.FIND_HELPERS_STATE,
-                        state=FindHelpersState(), initial=True)
+        leader = cls()
+        leader.add_state(name=cls.FIND_HELPERS_STATE,
+                         state=FindHelpersState(), initial=True)
 
         src = agent.factory_map[agent.order.location]
-        lider.add_state(name=cls.MOVE_SRC_STATE,
-                        state=MoveState(name=cls.MOVE_SRC_STATE,
-                                        next_state=cls.WAIT_FOR_HELPERS_SRC_STATE,
-                                        destination=src))
+        leader.add_state(name=cls.MOVE_SRC_STATE,
+                         state=MoveState(name=cls.MOVE_SRC_STATE,
+                                         next_state=cls.WAIT_FOR_HELPERS_SRC_STATE,
+                                         destination=src))
 
-        lider.add_state(name=cls.WAIT_FOR_HELPERS_SRC_STATE,
-                        state=WaitForHelpersState(name=cls.WAIT_FOR_HELPERS_SRC_STATE,
-                                                  next_state=cls.MOVE_DST_STATE,
-                                                  home=False))
+        leader.add_state(name=cls.WAIT_FOR_HELPERS_SRC_STATE,
+                         state=WaitForHelpersState(name=cls.WAIT_FOR_HELPERS_SRC_STATE,
+                                                   next_state=cls.MOVE_DST_STATE,
+                                                   home=False))
 
         dst = agent.factory_map[agent.gom_jid]
-        lider.add_state(name=cls.MOVE_DST_STATE,
-                        state=MoveState(name=cls.MOVE_DST_STATE,
-                                        next_state=cls.WAIT_FOR_HELPERS_DST_STATE,
-                                        destination=dst))
+        leader.add_state(name=cls.MOVE_DST_STATE,
+                         state=MoveState(name=cls.MOVE_DST_STATE,
+                                         next_state=cls.WAIT_FOR_HELPERS_DST_STATE,
+                                         destination=dst))
 
-        lider.add_state(name=cls.WAIT_FOR_HELPERS_DST_STATE,
-                        state=WaitForHelpersState(name=cls.WAIT_FOR_HELPERS_DST_STATE,
-                                                  next_state=None,
-                                                  home=True))
+        leader.add_state(name=cls.WAIT_FOR_HELPERS_DST_STATE,
+                         state=WaitForHelpersState(name=cls.WAIT_FOR_HELPERS_DST_STATE,
+                                                   next_state=None,
+                                                   home=True))
 
-        lider.add_rec_transition(
+        leader.add_rec_transition(
             source=cls.FIND_HELPERS_STATE, dest=cls.MOVE_SRC_STATE)
-        lider.add_rec_transition(
+        leader.add_rec_transition(
             source=cls.MOVE_SRC_STATE, dest=cls.WAIT_FOR_HELPERS_SRC_STATE)
-        lider.add_rec_transition(
+        leader.add_rec_transition(
             source=cls.WAIT_FOR_HELPERS_SRC_STATE, dest=cls.MOVE_DST_STATE)
-        lider.add_rec_transition(
+        leader.add_rec_transition(
             source=cls.MOVE_DST_STATE, dest=cls.WAIT_FOR_HELPERS_DST_STATE)
 
-        return lider
+        return leader
 
 
 class FindHelpersState(State):
     async def run(self):
         # TODO send and recive
         if len(self.agent.helpers) + 1 < self.agent.order.tr_count:
-            self.set_next_state(LiderBehaviour.FIND_HELPERS_STATE)
+            self.set_next_state(LeaderBehaviour.FIND_HELPERS_STATE)
         else:
-            self.set_next_state(LiderBehaviour.MOVE_SRC_STATE)
+            self.set_next_state(LeaderBehaviour.MOVE_SRC_STATE)
 
 
 class MoveState(State):
