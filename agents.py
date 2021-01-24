@@ -691,8 +691,10 @@ class MoveState(State):
         self.destination = destination
 
     async def run(self):
-        pass
-
+        move_behaviour = self.agent.move(self.destination)
+        await move_behaviour.join()
+        self.set_next_state(self.next_state)
+        
 
 class WaitForHelpersState(State):
     def __init__(self, name, next_state, home, *args, **kwargs):
