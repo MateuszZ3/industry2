@@ -604,6 +604,51 @@ class GroupOfMachinesAgent(Agent):
         )
 
 
+class HelperBehaviour(FSMBehaviour):
+    MOVE_TO_SRC_STATE = 'MOVE_TO_SRC_STATE'
+    WAIT_FOR_START_STATE = 'WAIT_FOR_START_STATE'
+    MOVE_TO_DST_STATE = 'MOVE_TO_DST_STATE'
+    WAIT_FOR_FINISH_STATE = 'WAIT_FOR_FINISH_STATE'
+
+    async def on_end(self):
+        self.agent.idle = True
+
+    @classmethod
+    def create(cls, agent):
+        helper = cls()
+        src = agent.factory_map[agent.order.location]
+        dst = agent.factory_map[agent.gom_jid]
+
+        helper.add_state(name=cls.MOVE_TO_SRC_STATE, state=MoveState(name=cls.MOVE_TO_SRC_STATE,
+                                                                     next_state=cls.WAIT_FOR_START_STATE,
+                                                                     destination=src), initial=True)
+        helper.add_state(name=cls.WAIT_FOR_START_STATE, state=WaitForStartState())
+        helper.add_state(name=cls.MOVE_TO_DST_STATE, state=MoveState(name=cls.MOVE_TO_DST_STATE,
+                                                                     next_state=cls.WAIT_FOR_FINISH_STATE,
+                                                                     destination=dst))
+        helper.add_state(name=cls.WAIT_FOR_FINISH_STATE, state=WaitForFinishState())
+
+        # helper.add_transition(source=cls.MOVE_TO_SRC_STATE, dest=cls.MOVE_TO_SRC_STATE)
+        helper.add_transition(source=cls.MOVE_TO_SRC_STATE, dest=cls.WAIT_FOR_START_STATE)
+        helper.add_transition(source=cls.WAIT_FOR_START_STATE, dest=cls.WAIT_FOR_START_STATE)
+        helper.add_transition(source=cls.WAIT_FOR_START_STATE, dest=cls.MOVE_TO_DST_STATE)
+        # helper.add_transition(source=cls.MOVE_TO_DST_STATE, dest=cls.MOVE_TO_DST_STATE)
+        helper.add_transition(source=cls.MOVE_TO_DST_STATE, dest=cls.WAIT_FOR_FINISH_STATE)
+        helper.add_transition(source=cls.WAIT_FOR_FINISH_STATE, dest=cls.WAIT_FOR_FINISH_STATE)
+
+        return helper
+
+
+class WaitForStartState(State):
+    async def run(self):
+        self.set_next_state(HelperBehaviour.MOVE_TO_DST_STATE)
+
+
+class WaitForFinishState(State):
+    async def run(self):
+        pass
+
+
 class LeaderBehaviour(FSMBehaviour):
     FIND_HELPERS_STATE = 'FIND_HELPERS_STATE'
     MOVE_SRC_STATE = 'MOVE_SRC_STATE'
@@ -694,7 +739,7 @@ class MoveState(State):
         move_behaviour = self.agent.move(self.destination)
         await move_behaviour.join()
         self.set_next_state(self.next_state)
-        
+
 
 class WaitForHelpersState(State):
     def __init__(self, name, next_state, home, *args, **kwargs):
@@ -902,12 +947,15 @@ class TransportRobotAgent(Agent):
         await recv.send(reply)
 
     def help(self, sender, order):
-        return True
+        return random.random() >= 0.5
 
     def decide(self):
         if self.order is not None:
             if self.order.tr_count > 1:
-                self.add_behaviour(LeaderBehaviour.create(self))
+                if self.help('',''):
+                    self.add_behaviour(LeaderBehaviour.create(self))
+                else:
+                    self.add_behaviour(HelperBehaviour.create(self))
             else:
                 self.get_order()
             return False
