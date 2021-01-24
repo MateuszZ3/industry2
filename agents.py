@@ -11,7 +11,7 @@ from typing import Dict, List
 
 import numpy as np
 from spade.agent import Agent
-from spade.behaviour import OneShotBehaviour, CyclicBehaviour, PeriodicBehaviour
+from spade.behaviour import OneShotBehaviour, CyclicBehaviour, PeriodicBehaviour, FSMBehaviour, State
 from spade.message import Message
 from spade.template import Template
 
@@ -102,7 +102,8 @@ class FactoryAgent(Agent):
                                            machines=gom_operations, jid=gom_jid, password=settings.PASSWORD)
                 await gom.start()
                 print(f'gom started gom_jid={gom_jid}')
-                await asyncio.sleep(settings.AGENT_CREATION_SLEEP)  # Wait around 100ms for registration to complete
+                # Wait around 100ms for registration to complete
+                await asyncio.sleep(settings.AGENT_CREATION_SLEEP)
 
                 # Create and start TR agent
                 tr_jids = [tr for (_, tr) in self.agent.jids if tr != tr_jid]
@@ -113,7 +114,8 @@ class FactoryAgent(Agent):
 
                 await tr.start()
                 print(f'tr started tr_jid={tr_jid}')
-                await asyncio.sleep(settings.AGENT_CREATION_SLEEP)  # Wait around 100ms for registration to complete
+                # Wait around 100ms for registration to complete
+                await asyncio.sleep(settings.AGENT_CREATION_SLEEP)
 
             # Send data to worker
             self.agent.perform_view_model_update()
@@ -200,7 +202,8 @@ class FactoryAgent(Agent):
         """Periodically updates TR list."""
         async def run(self):
             # Filter TR data before copying
-            tr_list_tmp = {k: TransportRobotAgent.filter(v.__dict__) for k, v in self.agent.tr_list.items()}
+            tr_list_tmp = {k: TransportRobotAgent.filter(
+                v.__dict__) for k, v in self.agent.tr_list.items()}
             tr_list_copy = deepcopy(tr_list_tmp)
             self.agent.update_view_model.emit(tr_list_copy, None, None)
 
@@ -238,8 +241,10 @@ class FactoryAgent(Agent):
         self.fail_handler = self.OrderFailureHandler()
         self.done_handler = self.OrderDoneHandler()
         self.position_handler = self.PositionHandler()
-        self.position_updater = self.PositionUpdater(settings.TR_POSITION_UPDATE_PERIOD)
-        self.tr_list_updater = self.TRListUpdater(settings.TR_LIST_UPDATE_PERIOD)
+        self.position_updater = self.PositionUpdater(
+            settings.TR_POSITION_UPDATE_PERIOD)
+        self.tr_list_updater = self.TRListUpdater(
+            settings.TR_LIST_UPDATE_PERIOD)
 
     async def setup(self):
         print(f"TickerAgent started at {datetime.datetime.now().time()}")
@@ -316,14 +321,16 @@ class FactoryAgent(Agent):
 
     def perform_view_model_update(self):
         # Filter TR data before copying
-        tr_list_tmp = {k: TransportRobotAgent.filter(v.__dict__) for k,v in self.tr_list.items()}
+        tr_list_tmp = {k: TransportRobotAgent.filter(
+            v.__dict__) for k, v in self.tr_list.items()}
         tr_list_copy = deepcopy(tr_list_tmp)
 
         tr_map_copy = deepcopy(self.tr_map)
         factory_map_copy = deepcopy(self.factory_map)
 
         # Note that each param can be None. In that case it won't be updated.
-        self.update_view_model.emit(tr_list_copy, tr_map_copy, factory_map_copy)
+        self.update_view_model.emit(
+            tr_list_copy, tr_map_copy, factory_map_copy)
 
 
 class Manager(Agent):
@@ -338,14 +345,16 @@ class Manager(Agent):
         async def run(self):
             while not self.agent.orders or not self.agent.free_goms:  # service an order if possible
                 await sleep(settings.MANAGER_LOOP_TIMEOUT)
-            gom: GoMInfo = random.choice(list(self.agent.free_goms.values()))  # select a free gom to pass an order to
+            # select a free gom to pass an order to
+            gom: GoMInfo = random.choice(list(self.agent.free_goms.values()))
             self.agent.free_goms.pop(gom.jid)
 
             order: Order = heappop(self.agent.orders)
             oid = str(order.order_id)
             if oid not in self.agent.active_orders:
                 self.agent.active_orders[oid] = ActiveOrder(order, '')
-            payload = GoMOrder.create(order, self.agent.active_orders[oid].location)
+            payload = GoMOrder.create(
+                order, self.agent.active_orders[oid].location)
             msg = Message(to=gom.jid)
             msg.set_metadata("performative", "request")
             msg.body = payload.to_json()
@@ -355,7 +364,6 @@ class Manager(Agent):
 
         async def on_end(self):
             print(f"{self.agent} finished main loop with exit code {self.exit_code}.")
-
 
     class OrderRequestHandler(CyclicBehaviour):
         """Request from factory"""
@@ -369,7 +377,6 @@ class Manager(Agent):
             reply = Message(self.agent.factory_jid)
             reply.set_metadata("performative", "agree")
             await self.send(reply)
-
 
     class OrderRefuseHandler(CyclicBehaviour):
         """Refuse from GoM"""
@@ -385,7 +392,6 @@ class Manager(Agent):
             print(f'{gom.jid} refused to process order{oid}.')
             raise UserWarning
 
-
     class OrderAgreeHandler(CyclicBehaviour):
         """Agree from GoM"""
 
@@ -395,7 +401,6 @@ class Manager(Agent):
                 return
             gom: GoMInfo = self.agent.gom_infos[str(msg.sender)]
             print(f'Agree received for order {msg.thread} from {msg.sender}.')
-
 
     class OrderDoneHandler(CyclicBehaviour):
         """Inform from GoM"""
@@ -421,7 +426,6 @@ class Manager(Agent):
                 print('It was the final stage.')
                 await self.send(report)
 
-
     class MalfunctionHandler(CyclicBehaviour):
         """Failure from GoM"""
 
@@ -437,17 +441,18 @@ class Manager(Agent):
             print('Received malfunction notice:')
             print(msg)
 
-
     def __init__(self, factory_jid: str, gom_infos, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.gom_infos: Dict[str, GoMInfo] = {}  # all goms
         self.free_goms: Dict[str, GoMInfo] = {}  # goms that can take an order
         for gom_jid, operations in gom_infos:
-            gom = GoMInfo(jid=gom_jid, machines=[Machine(operation=op) for op in operations])
+            gom = GoMInfo(jid=gom_jid, machines=[
+                          Machine(operation=op) for op in operations])
             self.gom_infos[gom_jid] = gom
             self.free_goms[gom_jid] = gom
         self.orders: List[Order] = []  # all orders accepted from factory
-        self.active_orders: Dict[str, Order] = {}  # orders currently in progress
+        # orders currently in progress
+        self.active_orders: Dict[str, Order] = {}
         self.factory_jid: str = factory_jid
 
         self.main_loop = self.MainLoop()
@@ -489,7 +494,8 @@ class GroupOfMachinesAgent(Agent):
                 Machine(operation=operation, working=True))
 
         self.order = None  # current order
-        self.msg_order = None  # request message (from Manager) related to self.order
+        # request message (from Manager) related to self.order
+        self.msg_order = None
 
     class WorkBehaviour(OneShotBehaviour):
         """
@@ -583,16 +589,107 @@ class GroupOfMachinesAgent(Agent):
     async def setup(self):
         self.add_behaviour(
             behaviour=RecvBehaviour(self.handle_manager_request),
-            template=Template(sender=self.manager_jid, metadata={"performative": "request"})
+            template=Template(sender=self.manager_jid, metadata={
+                              "performative": "request"})
         )
         self.add_behaviour(
             behaviour=RecvBehaviour(self.handle_tr_agree),
-            template=Template(sender=self.tr_jid, metadata={"performative": "agree"})
+            template=Template(sender=self.tr_jid, metadata={
+                              "performative": "agree"})
         )
         self.add_behaviour(
             behaviour=RecvBehaviour(self.handle_tr_inform),
-            template=Template(sender=self.tr_jid, metadata={"performative": "inform"})
+            template=Template(sender=self.tr_jid, metadata={
+                              "performative": "inform"})
         )
+
+
+class LiderBehaviour(FSMBehaviour):
+    FIND_HELPERS_STATE = 'FIND_HELPERS_STATE'
+    MOVE_SRC_STATE = 'MOVE_SRC_STATE'
+    WAIT_FOR_HELPERS_SRC_STATE = 'WAIT_FOR_HELPERS_SRC_STATE'
+    MOVE_DST_STATE = 'MOVE_DST_STATE'
+    WAIT_FOR_HELPERS_DST_STATE = 'WAIT_FOR_HELPERS_DST_STATE'
+
+    async def on_start(self):
+        pass
+
+    async def on_end(self):
+        self.agent.idle = True
+
+    def add_rec_transition(self, source, dest):
+        self.add_transition(source=source, dest=source)
+        self.add_transition(source=source, dest=dest)
+
+    @classmethod
+    def create(cls, agent):
+        lider = cls()
+        lider.add_state(name=cls.FIND_HELPERS_STATE,
+                        state=FindHelpersState(), initial=True)
+
+        src = agent.factory_map[agent.order.location]
+        lider.add_state(name=cls.MOVE_SRC_STATE,
+                        state=MoveState(name=cls.MOVE_SRC_STATE,
+                                        next_state=cls.WAIT_FOR_HELPERS_SRC_STATE,
+                                        destination=src))
+
+        lider.add_state(name=cls.WAIT_FOR_HELPERS_SRC_STATE,
+                        state=WaitForHelpersState(name=cls.WAIT_FOR_HELPERS_SRC_STATE,
+                                                  next_state=cls.MOVE_DST_STATE,
+                                                  home=False))
+
+        dst = agent.factory_map[agent.gom_jid]
+        lider.add_state(name=cls.MOVE_DST_STATE,
+                        state=MoveState(name=cls.MOVE_DST_STATE,
+                                        next_state=cls.WAIT_FOR_HELPERS_DST_STATE,
+                                        destination=dst))
+
+        lider.add_state(name=cls.WAIT_FOR_HELPERS_DST_STATE,
+                        state=WaitForHelpersState(name=cls.WAIT_FOR_HELPERS_DST_STATE,
+                                                  next_state=None,
+                                                  home=True))
+
+        lider.add_rec_transition(
+            source=cls.FIND_HELPERS_STATE, dest=cls.MOVE_SRC_STATE)
+        lider.add_rec_transition(
+            source=cls.MOVE_SRC_STATE, dest=cls.WAIT_FOR_HELPERS_SRC_STATE)
+        lider.add_rec_transition(
+            source=cls.WAIT_FOR_HELPERS_SRC_STATE, dest=cls.MOVE_DST_STATE)
+        lider.add_rec_transition(
+            source=cls.MOVE_DST_STATE, dest=cls.WAIT_FOR_HELPERS_DST_STATE)
+
+        return lider
+
+
+class FindHelpersState(State):
+    async def run(self):
+        # TODO send and recive
+        if len(self.agent.helpers) + 1 < self.agent.order.tr_count:
+            self.set_next_state(LiderBehaviour.FIND_HELPERS_STATE)
+        else:
+            self.set_next_state(LiderBehaviour.MOVE_SRC_STATE)
+
+
+class MoveState(State):
+    def __init__(self, name, next_state, destination, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.name = name
+        self.next_state = next_state
+        self.destination = destination
+
+    async def run(self):
+        pass
+
+
+class WaitForHelpersState(State):
+    def __init__(self, name, next_state, home, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.name = name
+        self.next_state = next_state
+        self.home = home
+
+    async def run(self):
+        pass
 
 
 class TransportRobotAgent(Agent):
@@ -613,7 +710,8 @@ class TransportRobotAgent(Agent):
         self.helping = {}
 
     # List of fields used when serializing.
-    serialized_fields = ['coworkers', 'factory_jid', 'gom_jid', 'helping', 'idle', 'jid', 'loaded_order', 'order']
+    serialized_fields = ['coworkers', 'factory_jid', 'gom_jid',
+                         'helping', 'idle', 'jid', 'loaded_order', 'order']
 
     def filter(d: dict) -> dict:
         """
@@ -683,11 +781,11 @@ class TransportRobotAgent(Agent):
         def __init__(self, decide, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self.decide = decide
-        
+
         async def run(self):
             if self.agent.idle:
                 self.agent.idle = self.decide()
-    
+
     def move(self, destination):
         """
         Moves TR
@@ -696,7 +794,8 @@ class TransportRobotAgent(Agent):
         :return: move behaviour
         """
 
-        move_behaviour = self.MoveBehaviour(destination, period=settings.TR_TICK_DURATION)
+        move_behaviour = self.MoveBehaviour(
+            destination, period=settings.TR_TICK_DURATION)
         self.add_behaviour(move_behaviour)
         return move_behaviour
 
@@ -786,13 +885,13 @@ class TransportRobotAgent(Agent):
 
     def help(self, sender, order):
         return True
-    
+
     def decide(self):
         if self.order is not None:
             self.get_order()
             return False
         return True
-        
+
     async def handle_tr_agree(self, msg, recv):
         pass
 
@@ -815,27 +914,29 @@ class TransportRobotAgent(Agent):
     async def setup(self):
         self.add_behaviour(
             behaviour=RecvBehaviour(self.handle_gom_request),
-            template=Template(sender=self.gom_jid, metadata={'performative': 'request'})
+            template=Template(sender=self.gom_jid, metadata={
+                              'performative': 'request'})
         )
         self.add_behaviour(
-            behaviour=self.DecideBehaviour(self.decide, period=settings.TR_DECIDE_TIMEOUT)
+            behaviour=self.DecideBehaviour(
+                self.decide, period=settings.TR_DECIDE_TIMEOUT)
         )
 
         # TR communication
-        self.add_behaviour(
-            behaviour=RecvBehaviour(self.handle_tr_request),
-            template=self.tr_template(metadata={'performative': 'request'})
-        )
-        self.add_behaviour(
-            behaviour=RecvBehaviour(self.handle_tr_agree),
-            template=self.tr_template(metadata={'performative': 'agree'})
-        )
-        self.add_behaviour(
-            behaviour=RecvBehaviour(self.handle_tr_refuse),
-            template=self.tr_template(metadata={'performative': 'refuse'})
-        )
+        # self.add_behaviour(
+        #    behaviour=RecvBehaviour(self.handle_tr_request),
+        #    template=self.tr_template(metadata={'performative': 'request'})
+        # )
+        # self.add_behaviour(
+        #    behaviour=RecvBehaviour(self.handle_tr_agree),
+        #    template=self.tr_template(metadata={'performative': 'agree'})
+        # )
+        # self.add_behaviour(
+        #    behaviour=RecvBehaviour(self.handle_tr_refuse),
+        #    template=self.tr_template(metadata={'performative': 'refuse'})
+        # )
 
-        self.add_behaviour(
-            behaviour=RecvBehaviour(self.handle_tr_inform),
-            template=self.tr_template(metadata={'performative': 'inform'})
-        )
+        # self.add_behaviour(
+        #    behaviour=RecvBehaviour(self.handle_tr_inform),
+        #    template=self.tr_template(metadata={'performative': 'inform'})
+        # )
