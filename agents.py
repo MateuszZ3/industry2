@@ -936,9 +936,16 @@ class TransportRobotAgent(Agent):
     async def handle_tr_inform(self, msg, recv):
         pass
 
-    def tr_template(self, **kwargs):
+    def tr_template(self, allowed=None, **kwargs):
+        """
+        Creates a template accepting only other TRs as senders. Possible to filter by `allowed`.
+
+        :param allowed: List of allowed JIDs.
+        """
         template_sum = None
         for tr_jid in self.tr_jids:
+            if allowed is not None and tr_jid not in allowed:
+                continue
             template = Template(sender=tr_jid, **kwargs)
             if template_sum is None:
                 template_sum = template
