@@ -939,7 +939,7 @@ class TransportRobotAgent(Agent):
     async def handle_tr_request(self, msg, recv):
         reply = msg.make_reply()
         order = GoMOrder.from_json(msg.body)
-        if help(msg.sender, order):
+        if self.help(msg.sender, order):
             self.helping[msg.sender] = (order, msg, datetime.datetime.now())
             reply.set_metadata('performative', 'agree')
         else:
