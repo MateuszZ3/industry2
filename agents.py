@@ -7,7 +7,7 @@ from asyncio import sleep
 from collections import defaultdict
 from dataclasses import dataclass
 from heapq import heappop, heappush
-from typing import List
+from typing import Dict, List
 
 import numpy as np
 from spade.agent import Agent
@@ -27,7 +27,7 @@ class Machine:
     working: bool = True
 
 
-@dataclass
+@dataclass(order=True)
 class GoMInfo:
     jid: str
     machines: List[Machine]
@@ -336,84 +336,126 @@ class Manager(Agent):
             print("Starting main loop . . .")
 
         async def run(self):
-            gom: GoMInfo = random.choice(self.agent.gom_infos)
-            while not self.agent.orders:
+            while not self.agent.orders or not self.agent.free_goms:  # service an order if possible
                 await sleep(settings.MANAGER_LOOP_TIMEOUT)
+            gom: GoMInfo = random.choice(list(self.agent.free_goms.values()))  # select a free gom to pass an order to
+            self.agent.free_goms.pop(gom.jid)
+
             order: Order = heappop(self.agent.orders)
-            print(order)
             oid = str(order.order_id)
             if oid not in self.agent.active_orders:
                 self.agent.active_orders[oid] = ActiveOrder(order, '')
-            gorder = GoMOrder.create(order, self.agent.active_orders[oid].location)
+            payload = GoMOrder.create(order, self.agent.active_orders[oid].location)
             msg = Message(to=gom.jid)
             msg.set_metadata("performative", "request")
-            msg.body = gorder.to_json()
+            msg.body = payload.to_json()
             msg.thread = oid
-            print(f'manager send: {msg}')
+            print(f'Manager sent: {msg}')
             await self.send(msg)
 
         async def on_end(self):
             print(f"{self.agent} finished main loop with exit code {self.exit_code}.")
+
 
     class OrderRequestHandler(CyclicBehaviour):
         """Request from factory"""
 
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
+            if msg is None:
+                return
             order = Order.from_json(msg.body)
-            print(order)
             heappush(self.agent.orders, order)
             reply = Message(self.agent.factory_jid)
             reply.set_metadata("performative", "agree")
             await self.send(reply)
+
 
     class OrderRefuseHandler(CyclicBehaviour):
         """Refuse from GoM"""
 
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
+            if msg is None:
+                return
+            gom: GoMInfo = self.agent.gom_infos[str(msg.sender)]
             oid = msg.thread
             active_order: ActiveOrder = self.agent.active_orders[oid]
             heappush(self.agent.orders, active_order.order)
+            print(f'{gom.jid} refused to process order{oid}.')
+            raise UserWarning
+
 
     class OrderAgreeHandler(CyclicBehaviour):
         """Agree from GoM"""
 
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
-            print('agree received for order ' + msg.thread)
-            return
+            if msg is None:
+                return
+            gom: GoMInfo = self.agent.gom_infos[str(msg.sender)]
+            print(f'Agree received for order {msg.thread} from {msg.sender}.')
+
 
     class OrderDoneHandler(CyclicBehaviour):
         """Inform from GoM"""
 
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
+            if msg is None:
+                return
+            gom: GoMInfo = self.agent.gom_infos[str(msg.sender)]
+            self.agent.free_goms[gom.jid] = gom
+
             oid = msg.thread
             active_order: ActiveOrder = self.agent.active_orders[oid]
-            active_order.advance(str(msg.sender))
+            active_order.advance(gom.jid)
+            print(f'{msg.sender} has completed a stage of order{oid}.')
             if not active_order.order.is_done():
                 heappush(self.agent.orders, active_order.order)
             else:
-                self.agent.active_orders[oid] = None
+                self.agent.active_orders.pop(oid)
                 report = Message(self.agent.factory_jid)
                 report.set_metadata("performative", "inform")
                 report.thread = oid
+                print('It was the final stage.')
                 await self.send(report)
+
+
+    class MalfunctionHandler(CyclicBehaviour):
+        """Failure from GoM"""
+
+        async def run(self):
+            msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
+            if msg is None:
+                return
+            key = str(msg.sender)
+            if key == self.factory_jid:
+                print('Failure notice received from the factory.')
+                raise UserWarning
+            gom: GoMInfo = self.agent.gom_infos[key]
+            print('Received malfunction notice:')
+            print(msg)
+
 
     def __init__(self, factory_jid: str, gom_infos, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.gom_infos = []
+        self.gom_infos: Dict[str, GoMInfo] = {}  # all goms
+        self.free_goms: Dict[str, GoMInfo] = {}  # goms that can take an order
         for gom_jid, operations in gom_infos:
-            self.gom_infos.append(GoMInfo(jid=gom_jid, machines=[Machine(operation=op) for op in operations]))
-        self.orders = []
-        self.active_orders = {}  # todo zamiana na PQ, tylko z (prio, id)
-        self.factory_jid = factory_jid
+            gom = GoMInfo(jid=gom_jid, machines=[Machine(operation=op) for op in operations])
+            self.gom_infos[gom_jid] = gom
+            self.free_goms[gom_jid] = gom
+        self.orders: List[Order] = []  # all orders accepted from factory
+        self.active_orders: Dict[str, Order] = {}  # orders currently in progress
+        self.factory_jid: str = factory_jid
+
         self.main_loop = self.MainLoop()
         self.req_handler = self.OrderRequestHandler()
         self.ref_handler = self.OrderRefuseHandler()
         self.agr_handler = self.OrderAgreeHandler()
         self.done_handler = self.OrderDoneHandler()
+        self.malfunction_handler = self.MalfunctionHandler()
 
     async def setup(self):
         print("Manager starting . . .")
@@ -430,6 +472,9 @@ class Manager(Agent):
         done_temp = Template()
         done_temp.metadata = {"performative": "inform"}
         self.add_behaviour(self.done_handler, done_temp)
+        malfunction_temp = Template()
+        malfunction_temp.metadata = {"performative": "failure"}
+        self.add_behaviour(self.malfunction_handler, malfunction_temp)
         self.add_behaviour(self.main_loop)
 
 
