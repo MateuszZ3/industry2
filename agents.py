@@ -668,7 +668,7 @@ class LeaderBehaviour(FSMBehaviour):
         self.agent.sent_help_requests = False
 
     async def on_end(self):
-        self.agent.deliver_order(self)  #TODO: nie wiem czy taki arg???
+        await self.agent.deliver_order(self)  #TODO: nie wiem czy taki arg???
 
     def add_rec_transition(self, source, dest):
         self.add_transition(source=source, dest=source)
