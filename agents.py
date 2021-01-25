@@ -981,7 +981,7 @@ class TransportRobotAgent(Agent):
             # Agree only if agent hasn't got enough helpers
             reply = msg.make_reply()
             if len(self.helpers) + 1 < self.order.tr_count:
-                self.helpers.append(msg.sender)
+                self.helpers.append(str(msg.sender))
                 reply.set_metadata('performative', 'agree')
                 print(f'{self.jid}: AGREE {msg.sender} -> AGREE')
             else:
