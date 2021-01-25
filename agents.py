@@ -608,10 +608,11 @@ class HelperBehaviour(FSMBehaviour):
     MOVE_TO_SRC_STATE = 'MOVE_TO_SRC_STATE'
     WAIT_FOR_START_STATE = 'WAIT_FOR_START_STATE'
     MOVE_TO_DST_STATE = 'MOVE_TO_DST_STATE'
-    WAIT_FOR_FINISH_STATE = 'WAIT_FOR_FINISH_STATE'
+    FINISH_STATE = 'FINISH_STATE'
 
     async def on_end(self):
         self.agent.order, self.agent.msg_order = self.agent.old_order
+        self.agent.idle = True
 
     @classmethod
     def create(cls, agent):
@@ -624,17 +625,17 @@ class HelperBehaviour(FSMBehaviour):
                                                                      destination=src), initial=True)
         helper.add_state(name=cls.WAIT_FOR_START_STATE, state=WaitForStartState())
         helper.add_state(name=cls.MOVE_TO_DST_STATE, state=MoveState(name=cls.MOVE_TO_DST_STATE,
-                                                                     next_state=cls.WAIT_FOR_FINISH_STATE,
+                                                                     next_state=cls.FINISH_STATE,
                                                                      destination=dst))
-        helper.add_state(name=cls.WAIT_FOR_FINISH_STATE, state=WaitForFinishState())
+        helper.add_state(name=cls.FINISH_STATE, state=FinishState())
 
         # helper.add_transition(source=cls.MOVE_TO_SRC_STATE, dest=cls.MOVE_TO_SRC_STATE)
         helper.add_transition(source=cls.MOVE_TO_SRC_STATE, dest=cls.WAIT_FOR_START_STATE)
         helper.add_transition(source=cls.WAIT_FOR_START_STATE, dest=cls.WAIT_FOR_START_STATE)
         helper.add_transition(source=cls.WAIT_FOR_START_STATE, dest=cls.MOVE_TO_DST_STATE)
         # helper.add_transition(source=cls.MOVE_TO_DST_STATE, dest=cls.MOVE_TO_DST_STATE)
-        helper.add_transition(source=cls.MOVE_TO_DST_STATE, dest=cls.WAIT_FOR_FINISH_STATE)
-        helper.add_transition(source=cls.WAIT_FOR_FINISH_STATE, dest=cls.WAIT_FOR_FINISH_STATE)
+        helper.add_transition(source=cls.MOVE_TO_DST_STATE, dest=cls.FINISH_STATE)
+        helper.add_transition(source=cls.FINISH_STATE, dest=cls.FINISH_STATE)
 
         return helper
 
@@ -651,12 +652,9 @@ class WaitForStartState(State):
             self.set_next_state(HelperBehaviour.WAIT_FOR_START_STATE)
 
 
-class WaitForFinishState(State):
-    async def on_start(self):
-        await self.send(Message(to=self.agent.leader, metadata={'performative': 'inform'}))
-
+class FinishState(State):
     async def run(self):
-        await self.agent.deliver_order(self)
+        await self.send(Message(to=self.agent.leader, metadata={'performative': 'inform'}))
 
 
 class LeaderBehaviour(FSMBehaviour):
