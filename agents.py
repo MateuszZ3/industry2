@@ -434,7 +434,7 @@ class Manager(Agent):
             if msg is None:
                 return
             key = str(msg.sender)
-            if key == self.factory_jid:
+            if key == self.agent.factory_jid:
                 print('Failure notice received from the factory.')
                 raise UserWarning
             gom: GoMInfo = self.agent.gom_infos[key]
