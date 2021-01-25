@@ -763,10 +763,10 @@ class WaitForHelpersState(State):
     async def run(self):
         print(f'{self.agent.jid} | {self.name}')
         if self.agent.ready:
-            for tr_jid in self.agent.current_inform_filter:
+            for tr_jid in self.agent.helpers:
                 msg = Message(to=tr_jid)
                 msg.set_metadata('performative', 'inform')
-                msg.body = self.agent.order.to_json
+                msg.body = self.agent.order.to_json()
                 await self.send(msg)
                 print(msg)
 
