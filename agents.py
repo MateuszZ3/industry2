@@ -777,7 +777,7 @@ class TransportRobotAgent(Agent):
         self.pending_helping = {}
 
     # List of fields used when serializing.
-    serialized_fields = ['factory_jid', 'gom_jid',
+    serialized_fields = ['factory_jid', 'gom_jid', 'leader',
                          'helping', 'helpers', 'idle', 'jid', 'loaded_order', 'order']
 
     def filter(d: dict) -> dict:
