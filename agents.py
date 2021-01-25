@@ -640,9 +640,14 @@ class HelperBehaviour(FSMBehaviour):
 
 
 class WaitForStartState(State):
+    async def on_start(self):
+        await self.send(Message(to=self.agent.leader, metadata={'performative': 'inform'}))
+
     async def run(self):
-        await sleep(10)
-        self.set_next_state(HelperBehaviour.MOVE_TO_DST_STATE)
+        if self.agent.ready:
+            self.set_next_state(HelperBehaviour.MOVE_TO_DST_STATE)
+        else:
+            self.set_next_state(HelperBehaviour.WAIT_FOR_START_STATE)
 
 
 class WaitForFinishState(State):
@@ -775,6 +780,7 @@ class TransportRobotAgent(Agent):
         self.old_order = None  # order and msg_order from mother gom, stored while helping
         self.leader = None
         self.pending_helping = {}
+        self.ready = False  # if able to proceed with the cooperative order
 
     # List of fields used when serializing.
     serialized_fields = ['factory_jid', 'gom_jid', 'leader',
@@ -997,12 +1003,17 @@ class TransportRobotAgent(Agent):
             # Helper <- Leader
             if len(self.pending_helping):
                 self.pending_helping.pop(str(msg.sender))
+                self.current_refuse_temp = None
+                self.current_agree_temp = None
             print(f'{self.jid}: REFUSE {msg.sender}')
         else:
             return
 
     async def handle_tr_inform(self, msg, recv):
-        pass
+        if self.leader is not None:
+            self.ready = True
+        else:
+            pass
 
     def tr_template(self, allowed=None, **kwargs):
         """
