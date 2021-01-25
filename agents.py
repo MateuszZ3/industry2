@@ -617,7 +617,7 @@ class HelperBehaviour(FSMBehaviour):
     def create(cls, agent):
         helper = cls()
         src = agent.factory_map[agent.order.location]
-        dst = agent.factory_map[agent.gom_jid]
+        dst = agent.factory_map[agent.leader.replace("tr", "gom")]
 
         helper.add_state(name=cls.MOVE_TO_SRC_STATE, state=MoveState(name=cls.MOVE_TO_SRC_STATE,
                                                                      next_state=cls.WAIT_FOR_START_STATE,
@@ -645,14 +645,18 @@ class WaitForStartState(State):
 
     async def run(self):
         if self.agent.ready:
+            self.agent.ready = False
             self.set_next_state(HelperBehaviour.MOVE_TO_DST_STATE)
         else:
             self.set_next_state(HelperBehaviour.WAIT_FOR_START_STATE)
 
 
 class WaitForFinishState(State):
+    async def on_start(self):
+        await self.send(Message(to=self.agent.leader, metadata={'performative': 'inform'}))
+
     async def run(self):
-        pass
+        await self.agent.deliver_order(self)
 
 
 class LeaderBehaviour(FSMBehaviour):
