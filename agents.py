@@ -720,6 +720,9 @@ class FindHelpersState(State):
             # Set receive templates first, so we don't miss any messages
             self.agent.current_agree_temp = self.agent.tr_template(body=payload)
             self.agent.current_refuse_temp = self.agent.tr_template(body=payload)
+            self.agent.current_inform_filter = []
+            self.agent.informs_left = self.agent.order.tr_count - 1
+            self.agent.inform_received = {}
 
             for tr_jid in self.agent.tr_jids:
                 msg = Message(to=tr_jid)
@@ -761,7 +764,22 @@ class WaitForHelpersState(State):
 
     async def run(self):
         print(f'{self.agent.jid} | {self.name}')
-        pass
+        if self.agent.ready:
+            for tr_jid in self.agent.current_inform_filter:
+                msg = Message(to=tr_jid)
+                msg.set_metadata('performative', 'inform')
+                msg.body = self.agent.order.to_json
+                await self.send(msg)
+                print(msg)
+
+            self.agent.informs_left = self.agent.order.tr_count - 1
+            for k in self.agent.inform_received:
+                self.agent.inform_received[k] = False
+            self.agent.ready = False
+
+            self.set_next_state(self._next_state)
+        else:
+            self.set_next_state(self.name)
 
 
 class TransportRobotAgent(Agent):
@@ -782,6 +800,7 @@ class TransportRobotAgent(Agent):
         self.sent_help_requests = False
         self.current_agree_temp = None
         self.current_refuse_temp = None
+        self.current_inform_filter = []
         self.helpers = []
         self.old_order = None  # order and msg_order from mother gom, stored while helping
         self.leader = None
@@ -994,6 +1013,7 @@ class TransportRobotAgent(Agent):
             reply = msg.make_reply()
             if len(self.helpers) + 1 < self.order.tr_count:
                 self.helpers.append(str(msg.sender))
+                self.inform_received[str(msg.sender)] = False
                 reply.set_metadata('performative', 'agree')
                 print(f'{self.jid}: AGREE {msg.sender} -> AGREE')
             else:
@@ -1019,7 +1039,17 @@ class TransportRobotAgent(Agent):
         if self.leader is not None:
             self.ready = True
         else:
-            pass
+            template = self.tr_template(allowed=self.helpers)
+            if template.match(msg):
+                # Inform od pomocnika
+                if not self.inform_received[str(msg.sender)]:
+                    self.inform_received[str(msg.sender)] = True
+                    self.informs_left -= 1
+                    print(f'{self.jid} got INFORM from {msg.sender} | left: {self.informs_left}')
+
+                if self.informs_left == 0:
+                    self.ready = True
+
 
     def tr_template(self, allowed=None, **kwargs):
         """
