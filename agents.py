@@ -220,7 +220,7 @@ class FactoryAgent(Agent):
         self.update_view_model = None
 
         # GoM IDs start with 1, so that 0 can be used as set-aside's ID
-        self.gom_count = 12
+        self.gom_count = 3
 
         # Maps JID to Point
         self.factory_map = {
@@ -738,23 +738,25 @@ class MoveState(State):
     def __init__(self, name, next_state, destination, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.name = name
-        self.next_state = next_state
+        self._next_state = next_state
         self.destination = destination
 
     async def run(self):
+        print(f'{self.agent.jid} | {self.name}')
         move_behaviour = self.agent.move(self.destination)
         await move_behaviour.join()
-        self.set_next_state(self.next_state)
+        self.set_next_state(self._next_state)
 
 
 class WaitForHelpersState(State):
     def __init__(self, name, next_state, home, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.name = name
-        self.next_state = next_state
+        self._next_state = next_state
         self.home = home
 
     async def run(self):
+        print(f'{self.agent.jid} | {self.name}')
         pass
 
 
