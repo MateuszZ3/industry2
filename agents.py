@@ -611,7 +611,7 @@ class HelperBehaviour(FSMBehaviour):
     WAIT_FOR_FINISH_STATE = 'WAIT_FOR_FINISH_STATE'
 
     async def on_end(self):
-        self.agent.idle = True
+        self.agent.order, self.agent.msg_order = self.agent.old_order
 
     @classmethod
     def create(cls, agent):
@@ -641,6 +641,7 @@ class HelperBehaviour(FSMBehaviour):
 
 class WaitForStartState(State):
     async def run(self):
+        await sleep(10)
         self.set_next_state(HelperBehaviour.MOVE_TO_DST_STATE)
 
 
@@ -761,8 +762,8 @@ class TransportRobotAgent(Agent):
         self.factory_jid = factory_jid
         self.factory_map = factory_map
         self.tr_jids = tr_jids
-        self.order = None  # from mother gom
-        self.msg_order = None  # from mother gom
+        self.order = None  # from mother gom originally, replaced by current when helping
+        self.msg_order = None  # from mother gom, as above
         self.loaded_order = None
 
         # TODO
@@ -771,6 +772,9 @@ class TransportRobotAgent(Agent):
         self.current_agree_temp = None
         self.current_refuse_temp = None
         self.helpers = []
+        self.old_order = None  # order and msg_order from mother gom, stored while helping
+        self.leader = None
+        self.pending_helping = {}
 
     # List of fields used when serializing.
     serialized_fields = ['factory_jid', 'gom_jid',
@@ -940,22 +944,28 @@ class TransportRobotAgent(Agent):
         reply = msg.make_reply()
         order = GoMOrder.from_json(msg.body)
         if self.help(msg.sender, order):
-            self.helping[msg.sender] = (order, msg, datetime.datetime.now())
+            self.current_agree_temp = Template(sender=str(msg.sender), metadata={"performative": "agree"})
+            self.current_refuse_temp = Template(sender=str(msg.sender), metadata={"performative": "refuse"})
+            self.pending_helping[str(msg.sender)] = (order, msg, datetime.datetime.now())
             reply.set_metadata('performative', 'agree')
         else:
             reply.set_metadata('performative', 'refuse')
         await recv.send(reply)
 
     def help(self, sender, order):
-        return random.random() >= 0.5
+        return True
+        # return random.random() >= 0.5
 
     def decide(self):
+        if len(self.helping) > 0:
+            self.old_order = self.order, self.msg_order
+            self.leader, (self.order, self.msg_order, _) = list(self.helping.items())[0]
+            self.helping.pop(self.leader)
+            self.add_behaviour(HelperBehaviour.create(self))
+            return False
         if self.order is not None:
             if self.order.tr_count > 1:
-                if self.help('',''):
-                    self.add_behaviour(LeaderBehaviour.create(self))
-                else:
-                    self.add_behaviour(HelperBehaviour.create(self))
+                self.add_behaviour(LeaderBehaviour.create(self))
             else:
                 self.get_order()
             return False
@@ -963,6 +973,11 @@ class TransportRobotAgent(Agent):
 
     async def handle_tr_agree(self, msg, recv):
         if self.current_agree_temp is not None and self.current_agree_temp.match(msg):
+            # Helper <- Leader
+            if len(self.pending_helping):
+                key = str(msg.sender)
+                self.helping[key] = self.pending_helping.pop(key)
+                return
             # Agree only if agent hasn't got enough helpers
             reply = msg.make_reply()
             if len(self.helpers) + 1 < self.order.tr_count:
@@ -979,6 +994,9 @@ class TransportRobotAgent(Agent):
 
     async def handle_tr_refuse(self, msg, recv):
         if self.current_refuse_temp is not None and self.current_refuse_temp.match(msg):
+            # Helper <- Leader
+            if len(self.pending_helping):
+                self.pending_helping.pop(str(msg.sender))
             print(f'{self.jid}: REFUSE {msg.sender}')
         else:
             return
@@ -1000,7 +1018,7 @@ class TransportRobotAgent(Agent):
             if template_sum is None:
                 template_sum = template
             else:
-                template_sum = template_sum & template
+                template_sum = template_sum | template
         return template_sum
 
     async def setup(self):
@@ -1015,10 +1033,10 @@ class TransportRobotAgent(Agent):
         )
 
         # TR communication
-        # self.add_behaviour(
-        #    behaviour=RecvBehaviour(self.handle_tr_request),
-        #    template=self.tr_template(metadata={'performative': 'request'})
-        # )
+        self.add_behaviour(
+           behaviour=RecvBehaviour(self.handle_tr_request),
+           template=self.tr_template(metadata={'performative': 'request'})
+        )
         self.add_behaviour(
            behaviour=RecvBehaviour(self.handle_tr_agree),
            template=self.tr_template(metadata={'performative': 'agree'})
@@ -1027,8 +1045,7 @@ class TransportRobotAgent(Agent):
            behaviour=RecvBehaviour(self.handle_tr_refuse),
            template=self.tr_template(metadata={'performative': 'refuse'})
         )
-
-        # self.add_behaviour(
-        #    behaviour=RecvBehaviour(self.handle_tr_inform),
-        #    template=self.tr_template(metadata={'performative': 'inform'})
-        # )
+        self.add_behaviour(
+           behaviour=RecvBehaviour(self.handle_tr_inform),
+           template=self.tr_template(metadata={'performative': 'inform'})
+        )
