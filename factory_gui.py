@@ -1,7 +1,7 @@
+import re
 import sys
 import time
 import traceback
-import re
 
 from PyQt5 import QtGui
 from PyQt5.QtCore import *
@@ -9,9 +9,9 @@ from PyQt5.QtWidgets import *
 from spade import quit_spade
 
 import settings
+from agents import FactoryAgent
 from common import Point
 from common import clip
-from agents import FactoryAgent
 
 COLORS = [
     # 17 undertones https://lospec.com/palette-list/17undertones
@@ -23,8 +23,7 @@ COLORS = [
 
 class ViewModel:
     def __init__(self, set_description_text_callback):
-        """
-        Factory view model. Holds all necessary data.
+        """Factory view model. Holds all necessary data.
 
         :param set_description_text_callback: Callback to be used after setting description text.
         """
@@ -64,8 +63,7 @@ class ViewModel:
 
 
 class WorkerSignals(QObject):
-    """
-    Defines the signals available from a running worker thread.
+    """Defines the signals available from a running worker thread.
 
     Supported signals are:
 
@@ -91,8 +89,7 @@ class WorkerSignals(QObject):
 
 
 class Worker(QRunnable):
-    """
-    Worker thread
+    """Worker thread.
 
     Inherits from QRunnable to handler worker thread setup, signals and wrap-up.
 
@@ -135,6 +132,7 @@ class Worker(QRunnable):
 
 class Canvas(QLabel):
     """Canvas representing factory map."""
+
     def __init__(self, view_model):
         super().__init__()
 
@@ -338,8 +336,7 @@ class Canvas(QLabel):
             painter.drawLine(x1, y1, x2, y2)
 
     def draw_text(self, point: Point, bb_size: int, painter: QtGui.QPainter, text: str) -> None:
-        """
-        Draws `text` with `painter` relatively to `point`. (0, 0) is centered.
+        """Draws `text` with `painter` relatively to `point`. (0, 0) is centered.
         Text is rendered `bb_size` units under `point`.
 
         :param point: Point on map in absolute units.
@@ -353,8 +350,7 @@ class Canvas(QLabel):
             painter.drawText(x - 50, y, 100, 100, Qt.AlignBaseline | Qt.AlignHCenter, text)
 
     def translate_map_to_window(self, point: Point) -> (float, float):
-        """
-        Translates point from map coordinates to window coordinates (pixels).
+        """Translates point from map coordinates to window coordinates (pixels).
 
         :param point: Point on map in absolute units.
         :return: Tuple of coordinates translated to position in pixels.
@@ -364,8 +360,7 @@ class Canvas(QLabel):
         return x, y
 
     def translate_window_to_map(self, x: float, y: float) -> Point:
-        """
-        Translates point from window coordinates (pixels) to position on map.
+        """Translates point from window coordinates (pixels) to position on map.
 
         :param x: Pixel X position.
         :param y: Pixel Y position.
@@ -383,10 +378,8 @@ class Canvas(QLabel):
 
 
 class MainWindow(QMainWindow):
-    """
-    Start's up a FactoryWorker, which in turn starts a FactoryAgent and then all other agents. FactoryWorker updates
-    ViewModel from which MainWindow (Canvas) then reads data.
-    """
+    """Start's up a FactoryWorker, which in turn starts a FactoryAgent and then all other agents. FactoryWorker updates
+    ViewModel from which MainWindow (Canvas) then reads data."""
 
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)

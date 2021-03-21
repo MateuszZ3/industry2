@@ -1,10 +1,9 @@
 import asyncio
-from copy import deepcopy
 import datetime
-import json
 import random
 from asyncio import sleep
 from collections import defaultdict
+from copy import deepcopy
 from dataclasses import dataclass
 from heapq import heappop, heappush
 from typing import Dict, List
@@ -44,8 +43,7 @@ class ActiveOrder:
 
 
 class RecvBehaviour(CyclicBehaviour):
-    """
-    Base receive handler behaviour.
+    """Base receive handler behaviour.
 
     :param handler: Handler run when a message is received (takes two arguments, msg - received message
         and recv - calling behaviour).
@@ -62,9 +60,7 @@ class RecvBehaviour(CyclicBehaviour):
 
 
 class OrderFactory:
-    """
-    Creates `Orders`.
-    """
+    """Creates `Orders`."""
 
     def __init__(self):
         self.unused_id = 1
@@ -88,9 +84,7 @@ class OrderFactory:
 
 class FactoryAgent(Agent):
     class StartAgents(OneShotBehaviour):
-        """
-        Starts all other agents.
-        """
+        """Starts all other agents."""
 
         async def run(self):
             gom_infos = []
@@ -129,9 +123,7 @@ class FactoryAgent(Agent):
             await manager.start()
 
     class OrderBehav(PeriodicBehaviour):
-        """
-        Cyclically generates orders and sends them to Manager Agent.
-        """
+        """Cyclically generates orders and sends them to Manager Agent."""
 
         async def run(self):
             await self.agent.start_behaviour.join()
@@ -149,9 +141,7 @@ class FactoryAgent(Agent):
             print(f"Message sent!\n{msg}")
 
     class OrderAgreeHandler(CyclicBehaviour):
-        """
-        On `agree` message from `Manager`.
-        """
+        """On `agree` message from `Manager`."""
 
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
@@ -159,9 +149,7 @@ class FactoryAgent(Agent):
                 print(msg)
 
     class OrderFailureHandler(CyclicBehaviour):
-        """
-        On `failure` message from `Manager`.
-        """
+        """On `failure` message from `Manager`."""
 
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
@@ -169,9 +157,7 @@ class FactoryAgent(Agent):
                 print(msg)
 
     class OrderDoneHandler(CyclicBehaviour):
-        """
-        On `inform` message from `Manager`.
-        """
+        """On `inform` message from `Manager`."""
 
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
@@ -179,10 +165,8 @@ class FactoryAgent(Agent):
                 print(msg)
 
     class PositionHandler(CyclicBehaviour):
-        """
-        On `inform` message from `TR` signifying position change.
-        Position is sent in body as `Point`.
-        """
+        """ On `inform` message from `TR` signifying position change. Position is sent in body as `Point`."""
+
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
             if msg is not None:
@@ -194,12 +178,14 @@ class FactoryAgent(Agent):
 
     class PositionUpdater(PeriodicBehaviour):
         """Periodically updates TR positions."""
+
         async def run(self):
             tr_map_copy = deepcopy(self.agent.tr_map)
             self.agent.update_view_model.emit(None, tr_map_copy, None)
 
     class TRListUpdater(PeriodicBehaviour):
         """Periodically updates TR list."""
+
         async def run(self):
             # Filter TR data before copying
             tr_list_tmp = {k: TransportRobotAgent.filter(
@@ -283,8 +269,7 @@ class FactoryAgent(Agent):
         self.add_behaviour(self.StartAgents())
 
     def set_update_callbacks(self, update_tr_pos_callback, update_view_model_callback) -> None:
-        """
-        Sets callbacks used for updating GUI.
+        """Sets callbacks used for updating GUI.
 
         :param update_tr_pos_callback:
         :param update_view_model_callback:
@@ -294,8 +279,7 @@ class FactoryAgent(Agent):
         self.update_view_model = update_view_model_callback
 
     def prepare(self):
-        """
-        Generates positions and JIDs for GoMs and TRs
+        """Generates positions and JIDs for GoMs and TRs
 
         :return:
         """
@@ -335,9 +319,7 @@ class FactoryAgent(Agent):
 
 class Manager(Agent):
     class MainLoop(CyclicBehaviour):
-        """
-        Main agent loop. Takes an order from the queue, if available, updates its state and sends a request to a GoM.
-        """
+        """Main agent loop. Takes an order from queue, if available, updates its state and sends a request to a GoM."""
 
         async def on_start(self):
             print("Starting main loop . . .")
@@ -366,7 +348,7 @@ class Manager(Agent):
             print(f"{self.agent} finished main loop with exit code {self.exit_code}.")
 
     class OrderRequestHandler(CyclicBehaviour):
-        """Request from factory"""
+        """Request from factory."""
 
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
@@ -379,7 +361,7 @@ class Manager(Agent):
             await self.send(reply)
 
     class OrderRefuseHandler(CyclicBehaviour):
-        """Refuse from GoM"""
+        """Refuse from GoM."""
 
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
@@ -393,7 +375,7 @@ class Manager(Agent):
             raise UserWarning
 
     class OrderAgreeHandler(CyclicBehaviour):
-        """Agree from GoM"""
+        """Agree from GoM."""
 
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
@@ -403,7 +385,7 @@ class Manager(Agent):
             print(f'Agree received for order {msg.thread} from {msg.sender}.')
 
     class OrderDoneHandler(CyclicBehaviour):
-        """Inform from GoM"""
+        """Inform from GoM."""
 
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
@@ -427,7 +409,7 @@ class Manager(Agent):
                 await self.send(report)
 
     class MalfunctionHandler(CyclicBehaviour):
-        """Failure from GoM"""
+        """Failure from GoM."""
 
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
@@ -447,7 +429,7 @@ class Manager(Agent):
         self.free_goms: Dict[str, GoMInfo] = {}  # goms that can take an order
         for gom_jid, operations in gom_infos:
             gom = GoMInfo(jid=gom_jid, machines=[
-                          Machine(operation=op) for op in operations])
+                Machine(operation=op) for op in operations])
             self.gom_infos[gom_jid] = gom
             self.free_goms[gom_jid] = gom
         self.orders: List[Order] = []  # all orders accepted from factory
@@ -498,9 +480,7 @@ class GroupOfMachinesAgent(Agent):
         self.msg_order = None
 
     class WorkBehaviour(OneShotBehaviour):
-        """
-        Perform work on current order.
-        """
+        """Perform work on current order."""
 
         async def run(self):
             assert self.agent.order is not None
@@ -520,8 +500,7 @@ class GroupOfMachinesAgent(Agent):
             self.agent.msg_order = None
 
     def can_accept_order(self, order):
-        """
-        Predicate that checks if TR can accept this order.
+        """Predicate that checks if TR can accept this order.
 
         :param order: requested order
         :return: result
@@ -536,8 +515,7 @@ class GroupOfMachinesAgent(Agent):
         ])
 
     async def handle_tr_agree(self, msg, recv):
-        """
-        On `agree` message from `TR`.
+        """On `agree` message from `TR`.
 
         :param msg: received message
         :param recv: calling behaviour
@@ -546,8 +524,7 @@ class GroupOfMachinesAgent(Agent):
         assert msg is not None
 
     async def handle_tr_inform(self, msg, recv):
-        """
-        On `inform` message from `TR`
+        """On `inform` message from `TR`
 
         :param msg: received message
         :param recv: calling behaviour
@@ -557,8 +534,7 @@ class GroupOfMachinesAgent(Agent):
         self.add_behaviour(self.WorkBehaviour())
 
     async def handle_manager_request(self, msg, recv):
-        """
-        On `request` message from `Manager`
+        """On `request` message from `Manager`
 
         :param msg: received message
         :param recv: calling behaviour
@@ -590,17 +566,17 @@ class GroupOfMachinesAgent(Agent):
         self.add_behaviour(
             behaviour=RecvBehaviour(self.handle_manager_request),
             template=Template(sender=self.manager_jid, metadata={
-                              "performative": "request"})
+                "performative": "request"})
         )
         self.add_behaviour(
             behaviour=RecvBehaviour(self.handle_tr_agree),
             template=Template(sender=self.tr_jid, metadata={
-                              "performative": "agree"})
+                "performative": "agree"})
         )
         self.add_behaviour(
             behaviour=RecvBehaviour(self.handle_tr_inform),
             template=Template(sender=self.tr_jid, metadata={
-                              "performative": "inform"})
+                "performative": "inform"})
         )
 
 
@@ -668,7 +644,7 @@ class LeaderBehaviour(FSMBehaviour):
         self.agent.sent_help_requests = False
 
     async def on_end(self):
-        await self.agent.deliver_order(self)  #TODO: nie wiem czy taki arg???
+        await self.agent.deliver_order(self)  # TODO: nie wiem czy taki arg???
 
     def add_rec_transition(self, source, dest):
         self.add_transition(source=source, dest=source)
@@ -808,8 +784,7 @@ class TransportRobotAgent(Agent):
                          'helping', 'helpers', 'idle', 'jid', 'loaded_order', 'order']
 
     def filter(d: dict) -> dict:
-        """
-        Filters a given dictionary by `serialized_fields`.
+        """Filters a given dictionary by `serialized_fields`.
 
         :param d: TR converted to a dictionary.
         :return: Filtered dictionary.
@@ -817,9 +792,7 @@ class TransportRobotAgent(Agent):
         return {k: v for (k, v) in d.items() if k in TransportRobotAgent.serialized_fields}
 
     class MoveBehaviour(PeriodicBehaviour):
-        """
-        Moves agent behaviour.
-        """
+        """Moves agent behaviour."""
 
         def __init__(self, destination, *args, **kwargs):
             super().__init__(*args, **kwargs)
@@ -843,9 +816,7 @@ class TransportRobotAgent(Agent):
                 await self.after_tick()
 
         async def after_tick(self):
-            """
-            Method called after each tick
-            """
+            """Method called after each tick"""
 
             msg = Message(
                 to=self.agent.factory_jid,
@@ -855,8 +826,7 @@ class TransportRobotAgent(Agent):
             await self.send(msg)
 
     class AfterBehaviour(OneShotBehaviour):
-        """
-        Behavior which triggers handler after the previous one has finished.
+        """Behavior which triggers handler after the previous one has finished.
 
         :param wait_behaviour: first behaviour
         :param after_handler: Handler runs when a wait_behaviour is finished (takes one argument, calling behaviour).
@@ -881,8 +851,7 @@ class TransportRobotAgent(Agent):
                 self.agent.idle = self.decide()
 
     def move(self, destination):
-        """
-        Moves TR
+        """Moves TR.
 
         :param destination: location
         :return: move behaviour
@@ -894,8 +863,7 @@ class TransportRobotAgent(Agent):
         return move_behaviour
 
     def add_after_behaviour(self, wait_behaviour, after_handler):
-        """
-        Add handler which triggers after a given behaviour.
+        """Add handler which triggers after a given behaviour.
 
         :param wait_behaviour: wait_for
         :param after_handler: Handler runs when a wait_behaviour is finished (takes one argument, calling behaviour).
@@ -907,8 +875,7 @@ class TransportRobotAgent(Agent):
         return after_behaviour
 
     async def load_order(self, behaviour):
-        """
-        Load an order (self.order).
+        """Loads an order (self.order).
 
         :param behaviour: calling behaviour
         """
@@ -923,8 +890,7 @@ class TransportRobotAgent(Agent):
         self.add_after_behaviour(move_behaviour, self.deliver_order)
 
     async def deliver_order(self, behaviour):
-        """
-        Deliver an order (self.loaded) to GoM.
+        """Delivers an order (self.loaded) to GoM.
 
         :param behaviour: calling behaviour
         """
@@ -942,17 +908,14 @@ class TransportRobotAgent(Agent):
         self.idle = True
 
     def get_order(self):
-        """
-        Get an order (self.order) for GoM.
-        """
+        """Gets an order (self.order) for GoM."""
 
         destination = self.factory_map[self.order.location]
         move_behaviour = self.move(destination)
         self.add_after_behaviour(move_behaviour, self.load_order)
 
     async def handle_gom_request(self, msg, recv):
-        """
-        On `request` message from `GoM`
+        """On `request` message from `GoM`
 
         :param msg: received message
         :param recv: calling behaviour
@@ -1046,10 +1009,8 @@ class TransportRobotAgent(Agent):
                 if self.informs_left == 0:
                     self.ready = True
 
-
     def tr_template(self, allowed=None, **kwargs):
-        """
-        Creates a template accepting only other TRs as senders. Possible to filter by `allowed`.
+        """Creates a template accepting only other TRs as senders. Possible to filter by `allowed`.
 
         :param allowed: List of allowed JIDs.
         """
@@ -1068,7 +1029,7 @@ class TransportRobotAgent(Agent):
         self.add_behaviour(
             behaviour=RecvBehaviour(self.handle_gom_request),
             template=Template(sender=self.gom_jid, metadata={
-                              'performative': 'request'})
+                'performative': 'request'})
         )
         self.add_behaviour(
             behaviour=self.DecideBehaviour(
@@ -1077,18 +1038,18 @@ class TransportRobotAgent(Agent):
 
         # TR communication
         self.add_behaviour(
-           behaviour=RecvBehaviour(self.handle_tr_request),
-           template=self.tr_template(metadata={'performative': 'request'})
+            behaviour=RecvBehaviour(self.handle_tr_request),
+            template=self.tr_template(metadata={'performative': 'request'})
         )
         self.add_behaviour(
-           behaviour=RecvBehaviour(self.handle_tr_agree),
-           template=self.tr_template(metadata={'performative': 'agree'})
+            behaviour=RecvBehaviour(self.handle_tr_agree),
+            template=self.tr_template(metadata={'performative': 'agree'})
         )
         self.add_behaviour(
-           behaviour=RecvBehaviour(self.handle_tr_refuse),
-           template=self.tr_template(metadata={'performative': 'refuse'})
+            behaviour=RecvBehaviour(self.handle_tr_refuse),
+            template=self.tr_template(metadata={'performative': 'refuse'})
         )
         self.add_behaviour(
-           behaviour=RecvBehaviour(self.handle_tr_inform),
-           template=self.tr_template(metadata={'performative': 'inform'})
+            behaviour=RecvBehaviour(self.handle_tr_inform),
+            template=self.tr_template(metadata={'performative': 'inform'})
         )
