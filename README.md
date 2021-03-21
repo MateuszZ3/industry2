@@ -64,3 +64,8 @@ Do reprezentacji stanów TRa korzystamy z FSM
 - (**Helper 2.**) Rusza, gdy dostanie informacje od Lidera o zakonczonym zaladunku (<- inform).
 - (**Helper 3.**) Oznajmia Lidera, ze dotarl na miejsce rozladunku (-> inform).
 - (**Helper 4.**) Staje sie bezrobotny, 'idle'.
+
+### Poza tym
+- Wielki refactor (nazwy orderów, handlerów, połączenie ich z wiadomościami) named tuple, dataclassy
+- Walidacja assercji
+- Przynajmniej szczątkowa dokumentacja, żeby *otworzyć* ten projekt na innych 
