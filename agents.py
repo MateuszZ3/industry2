@@ -77,7 +77,7 @@ class OrderFactory:
             priority=1,
             order_id=self.unused_id,
             current_operation=0,
-            tr_counts=[2] * ops_num,
+            tr_counts=[3] * ops_num,
             operations=ops
         )
 
@@ -220,7 +220,7 @@ class FactoryAgent(Agent):
         self.update_view_model = None
 
         # GoM IDs start with 1, so that 0 can be used as set-aside's ID
-        self.gom_count = 3
+        self.gom_count = settings.GOM_COUNT
 
         # Maps JID to Point
         self.factory_map = {
@@ -236,7 +236,7 @@ class FactoryAgent(Agent):
         # Behaviours
         start_at = datetime.datetime.now() + datetime.timedelta(seconds=5)
         self.start_behaviour = self.StartAgents()
-        self.order_behav = self.OrderBehav(120.0, start_at)
+        self.order_behav = self.OrderBehav(8.0, start_at)
         self.agr_handler = self.OrderAgreeHandler()
         self.fail_handler = self.OrderFailureHandler()
         self.done_handler = self.OrderDoneHandler()
@@ -747,7 +747,6 @@ class MoveState(State):
         self.destination = destination
 
     async def run(self):
-        print(f'{self.agent.jid} | {self.name}')
         move_behaviour = self.agent.move(self.destination)
         await move_behaviour.join()
         self.set_next_state(self._next_state)
@@ -761,7 +760,6 @@ class WaitForHelpersState(State):
         self.home = home
 
     async def run(self):
-        print(f'{self.agent.jid} | {self.name}')
         if self.agent.ready:
             for tr_jid in self.agent.helpers:
                 msg = Message(to=tr_jid)
