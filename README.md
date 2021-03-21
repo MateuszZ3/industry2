@@ -69,3 +69,4 @@ Do reprezentacji stanów TRa korzystamy z FSM
 - Wielki refactor (nazwy orderów, handlerów, połączenie ich z wiadomościami) named tuple, dataclassy
 - Walidacja assercji
 - Przynajmniej szczątkowa dokumentacja, żeby *otworzyć* ten projekt na innych 
+- Logi z treściami wszystkich wiadomości
