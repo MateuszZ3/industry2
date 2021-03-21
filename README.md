@@ -17,6 +17,7 @@ Python 3.8.2
 ## Links
 
 - [Managing Multiple Python Versions With pyenv](https://realpython.com/intro-to-pyenv/)
+- [Spade FSM](https://spade-mas.readthedocs.io/en/latest/behaviours.html?highlight=state#finite-state-machine-behaviour)
 
 
 ## Todo
