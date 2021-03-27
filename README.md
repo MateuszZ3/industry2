@@ -49,24 +49,3 @@ GoMa, czy Pracownikiem pomagajacym Liderowi ze slownika zadeklarowanych pomocy '
 bezrobotny.
 
 Do reprezentacji stanów TRa korzystamy z FSM
-
-### Review z Trello :p
-- (**Lider 1.**) Poszukuje chetnych do pomocy (-> request).
-- (**Lider 2.**) Zbiera odpowiedzi i potwierdza zgode, zbyt wiele odpowiedzi zgody (<- agree | refuse, -> agree | refuse)?
-- (**Lider 6.**) Ozajmia GoM, ze towar dostarczony, gdy wszyscy Pomocnicy dojada (-> inform).
-- (**Lider 7.**) Staje sie bezrobotny, 'idle'.
-
-### TODO z Trello :p
-- (**Lider 3.**) Czeka, az wymagana liczba TR pomagajacych zglosi sie do celu zaladunku (<- inform).
-- (**Lider 4.**) Oznajmia pomocnikom, ze towar jest juz zaladowany i moga jechac do celu (-> inform).
-- (**Lider 5.**) Zbiera informacje od Pracownikow, ktorzy juz dojechali (<- inform).
-- (**Helper 1.**) Oznajmia Lidera, ze dotarl do celu (-> inform).
-- (**Helper 2.**) Rusza, gdy dostanie informacje od Lidera o zakonczonym zaladunku (<- inform).
-- (**Helper 3.**) Oznajmia Lidera, ze dotarl na miejsce rozladunku (-> inform).
-- (**Helper 4.**) Staje sie bezrobotny, 'idle'.
-
-### Poza tym
-- Wielki refactor (nazwy orderów, handlerów, połączenie ich z wiadomościami) named tuple, dataclassy
-- Walidacja assercji
-- Przynajmniej szczątkowa dokumentacja, żeby *otworzyć* ten projekt na innych 
-- Logi z treściami wszystkich wiadomości
