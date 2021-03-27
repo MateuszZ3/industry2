@@ -42,6 +42,18 @@ class ActiveOrder:
         self.location = loc
 
 
+def def_print(str: str, **kwargs):
+    pass
+    # print(str, **kwargs)
+
+
+async def send(behav: CyclicBehaviour, message: Message):
+    print(datetime.datetime.now())
+    print(message)
+    print()
+    await behav.send(message)
+
+
 class RecvBehaviour(CyclicBehaviour):
     """Base receive handler behaviour.
 
@@ -95,7 +107,7 @@ class FactoryAgent(Agent):
                 gom = GroupOfMachinesAgent(manager_jid=self.agent.manager_jid, tr_jid=tr_jid,
                                            machines=gom_operations, jid=gom_jid, password=settings.PASSWORD)
                 await gom.start()
-                print(f'gom started gom_jid={gom_jid}')
+                def_print(f'gom started gom_jid={gom_jid}')
                 # Wait around 100ms for registration to complete
                 await asyncio.sleep(settings.AGENT_CREATION_SLEEP)
 
@@ -107,7 +119,7 @@ class FactoryAgent(Agent):
                 self.agent.tr_list[tr_jid] = tr
 
                 await tr.start()
-                print(f'tr started tr_jid={tr_jid}')
+                def_print(f'tr started tr_jid={tr_jid}')
                 # Wait around 100ms for registration to complete
                 await asyncio.sleep(settings.AGENT_CREATION_SLEEP)
 
@@ -127,7 +139,7 @@ class FactoryAgent(Agent):
 
         async def run(self):
             await self.agent.start_behaviour.join()
-            # print(f"Running {type(self).__name__}...")
+            # def_print(f"Running {type(self).__name__}...")
 
             order = self.agent.order_factory.create()
             self.agent.orders[order.order_id] = order
@@ -137,8 +149,8 @@ class FactoryAgent(Agent):
             msg.set_metadata("performative", "request")
             msg.body = order.to_json()  # Set the message content
 
-            await self.send(msg)
-            print(f"Message sent!\n{msg}")
+            await send(self, msg)
+            def_print(f"Message sent!\n{msg}")
 
     class OrderAgreeHandler(CyclicBehaviour):
         """On `agree` message from `Manager`."""
@@ -146,7 +158,7 @@ class FactoryAgent(Agent):
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
             if msg is not None:
-                print(msg)
+                def_print(msg)
 
     class OrderFailureHandler(CyclicBehaviour):
         """On `failure` message from `Manager`."""
@@ -154,7 +166,7 @@ class FactoryAgent(Agent):
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
             if msg is not None:
-                print(msg)
+                def_print(msg)
 
     class OrderDoneHandler(CyclicBehaviour):
         """On `inform` message from `Manager`."""
@@ -162,7 +174,7 @@ class FactoryAgent(Agent):
         async def run(self):
             msg = await self.receive(timeout=settings.RECEIVE_TIMEOUT)
             if msg is not None:
-                print(msg)
+                def_print(msg)
 
     class PositionHandler(CyclicBehaviour):
         """ On `inform` message from `TR` signifying position change. Position is sent in body as `Point`."""
@@ -233,7 +245,7 @@ class FactoryAgent(Agent):
             settings.TR_LIST_UPDATE_PERIOD)
 
     async def setup(self):
-        print(f"TickerAgent started at {datetime.datetime.now().time()}")
+        def_print(f"TickerAgent started at {datetime.datetime.now().time()}")
         if self.update_tr_position is None:
             raise Exception("update_tr_position not set")
         if self.update_view_model is None:
@@ -322,7 +334,7 @@ class Manager(Agent):
         """Main agent loop. Takes an order from queue, if available, updates its state and sends a request to a GoM."""
 
         async def on_start(self):
-            print("Starting main loop . . .")
+            def_print("Starting main loop . . .")
 
         async def run(self):
             while not self.agent.orders or not self.agent.free_goms:  # service an order if possible
@@ -341,11 +353,11 @@ class Manager(Agent):
             msg.set_metadata("performative", "request")
             msg.body = payload.to_json()
             msg.thread = oid
-            print(f'Manager sent: {msg}')
-            await self.send(msg)
+            def_print(f'Manager sent: {msg}')
+            await send(self, msg)
 
         async def on_end(self):
-            print(f"{self.agent} finished main loop with exit code {self.exit_code}.")
+            def_print(f"{self.agent} finished main loop with exit code {self.exit_code}.")
 
     class OrderRequestHandler(CyclicBehaviour):
         """Request from factory."""
@@ -358,7 +370,7 @@ class Manager(Agent):
             heappush(self.agent.orders, order)
             reply = Message(self.agent.factory_jid)
             reply.set_metadata("performative", "agree")
-            await self.send(reply)
+            await send(self, reply)
 
     class OrderRefuseHandler(CyclicBehaviour):
         """Refuse from GoM."""
@@ -371,7 +383,7 @@ class Manager(Agent):
             oid = msg.thread
             active_order: ActiveOrder = self.agent.active_orders[oid]
             heappush(self.agent.orders, active_order.order)
-            print(f'{gom.jid} refused to process order{oid}.')
+            def_print(f'{gom.jid} refused to process order{oid}.')
             raise UserWarning
 
     class OrderAgreeHandler(CyclicBehaviour):
@@ -382,7 +394,7 @@ class Manager(Agent):
             if msg is None:
                 return
             gom: GoMInfo = self.agent.gom_infos[str(msg.sender)]
-            print(f'Agree received for order {msg.thread} from {msg.sender}.')
+            def_print(f'Agree received for order {msg.thread} from {msg.sender}.')
 
     class OrderDoneHandler(CyclicBehaviour):
         """Inform from GoM."""
@@ -397,7 +409,7 @@ class Manager(Agent):
             oid = msg.thread
             active_order: ActiveOrder = self.agent.active_orders[oid]
             active_order.advance(gom.jid)
-            print(f'{msg.sender} has completed a stage of order{oid}.')
+            def_print(f'{msg.sender} has completed a stage of order{oid}.')
             if not active_order.order.is_done():
                 heappush(self.agent.orders, active_order.order)
             else:
@@ -405,8 +417,8 @@ class Manager(Agent):
                 report = Message(self.agent.factory_jid)
                 report.set_metadata("performative", "inform")
                 report.thread = oid
-                print('It was the final stage.')
-                await self.send(report)
+                def_print('It was the final stage.')
+                await send(self, report)
 
     class MalfunctionHandler(CyclicBehaviour):
         """Failure from GoM."""
@@ -417,11 +429,11 @@ class Manager(Agent):
                 return
             key = str(msg.sender)
             if key == self.agent.factory_jid:
-                print('Failure notice received from the factory.')
+                def_print('Failure notice received from the factory.')
                 raise UserWarning
             gom: GoMInfo = self.agent.gom_infos[key]
-            print('Received malfunction notice:')
-            print(msg)
+            def_print('Received malfunction notice:')
+            def_print(msg)
 
     def __init__(self, factory_jid: str, gom_infos, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -445,7 +457,7 @@ class Manager(Agent):
         self.malfunction_handler = self.MalfunctionHandler()
 
     async def setup(self):
-        print("Manager starting . . .")
+        def_print("Manager starting . . .")
         fac_temp = Template()
         fac_temp.sender = self.factory_jid
         fac_temp.metadata = {"performative": "request"}
@@ -493,7 +505,7 @@ class GroupOfMachinesAgent(Agent):
 
             reply = self.agent.msg_order.make_reply()
             reply.set_metadata('performative', 'inform')
-            await self.send(reply)
+            await send(self, reply)
 
             # Set no active order
             self.agent.order = None
@@ -553,14 +565,14 @@ class GroupOfMachinesAgent(Agent):
         else:
             reply.set_metadata('performative', 'refuse')
 
-        await recv.send(reply)
+        await send(recv, reply)
         if accepted:
             if str(self.jid) == order.location:
                 self.add_behaviour(self.WorkBehaviour())
             else:
                 msg_tr = Message(to=self.tr_jid, body=msg.body)
                 msg_tr.set_metadata('performative', 'request')
-                await recv.send(msg_tr)
+                await send(recv, msg_tr)
 
     async def setup(self):
         self.add_behaviour(
@@ -618,7 +630,7 @@ class HelperBehaviour(FSMBehaviour):
 
 class WaitForStartState(State):
     async def on_start(self):
-        await self.send(Message(to=self.agent.leader, metadata={'performative': 'inform'}))
+        await send(self, Message(to=self.agent.leader, metadata={'performative': 'inform'}))
 
     async def run(self):
         if self.agent.ready:
@@ -630,7 +642,7 @@ class WaitForStartState(State):
 
 class FinishState(State):
     async def run(self):
-        await self.send(Message(to=self.agent.leader, metadata={'performative': 'inform'}))
+        await send(self, Message(to=self.agent.leader, metadata={'performative': 'inform'}))
 
 
 class LeaderBehaviour(FSMBehaviour):
@@ -702,8 +714,8 @@ class FindHelpersState(State):
                 msg = Message(to=tr_jid)
                 msg.set_metadata('performative', 'request')
                 msg.body = payload
-                await self.send(msg)
-                print(msg)
+                await send(self, msg)
+                def_print(msg)
 
             # Mark requests state as sent,
             self.agent.sent_help_requests = True
@@ -741,8 +753,8 @@ class WaitForHelpersState(State):
                 msg = Message(to=tr_jid)
                 msg.set_metadata('performative', 'inform')
                 msg.body = self.agent.order.to_json()
-                await self.send(msg)
-                print(msg)
+                await send(self, msg)
+                def_print(msg)
 
             self.agent.informs_left = self.agent.order.tr_count - 1
             for k in self.agent.inform_received:
@@ -901,7 +913,7 @@ class TransportRobotAgent(Agent):
 
         reply = self.msg_order.make_reply()
         reply.set_metadata('performative', 'inform')
-        await behaviour.send(reply)
+        await send(behaviour, reply)
         self.loaded_order = None
         self.msg_order = None
         self.order = None
@@ -928,7 +940,7 @@ class TransportRobotAgent(Agent):
         self.order = GoMOrder.from_json(msg.body)
         reply = self.msg_order.make_reply()
         reply.set_metadata('performative', 'agree')
-        await recv.send(reply)
+        await send(recv, reply)
 
     async def handle_tr_request(self, msg, recv):
         reply = msg.make_reply()
@@ -940,7 +952,7 @@ class TransportRobotAgent(Agent):
             reply.set_metadata('performative', 'agree')
         else:
             reply.set_metadata('performative', 'refuse')
-        await recv.send(reply)
+        await send(recv, reply)
 
     def help(self, sender, order):
         return True
@@ -974,11 +986,11 @@ class TransportRobotAgent(Agent):
                 self.helpers.append(str(msg.sender))
                 self.inform_received[str(msg.sender)] = False
                 reply.set_metadata('performative', 'agree')
-                print(f'{self.jid}: AGREE {msg.sender} -> AGREE')
+                def_print(f'{self.jid}: AGREE {msg.sender} -> AGREE')
             else:
                 reply.set_metadata('performative', 'refuse')
-                print(f'{self.jid}: AGREE {msg.sender} -> REFUSE')
-            await recv.send(reply)
+                def_print(f'{self.jid}: AGREE {msg.sender} -> REFUSE')
+            await send(recv, reply)
         else:
             # Message is not related to current requests as leader
             return
@@ -990,7 +1002,7 @@ class TransportRobotAgent(Agent):
                 self.pending_helping.pop(str(msg.sender))
                 self.current_refuse_temp = None
                 self.current_agree_temp = None
-            print(f'{self.jid}: REFUSE {msg.sender}')
+            def_print(f'{self.jid}: REFUSE {msg.sender}')
         else:
             return
 
@@ -1004,7 +1016,7 @@ class TransportRobotAgent(Agent):
                 if not self.inform_received[str(msg.sender)]:
                     self.inform_received[str(msg.sender)] = True
                     self.informs_left -= 1
-                    print(f'{self.jid} got INFORM from {msg.sender} | left: {self.informs_left}')
+                    def_print(f'{self.jid} got INFORM from {msg.sender} | left: {self.informs_left}')
 
                 if self.informs_left == 0:
                     self.ready = True
