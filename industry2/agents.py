@@ -14,10 +14,9 @@ from spade.behaviour import OneShotBehaviour, CyclicBehaviour, PeriodicBehaviour
 from spade.message import Message
 from spade.template import Template
 
-import settings
-from common import GoMOrder
-from common import Order, Point
-from enums import Operation
+import industry2.settings as settings  # TODO: Bad?
+from industry2.common import GoMOrder, Order, Point
+from industry2.enums import Operation
 
 
 @dataclass

@@ -12,7 +12,7 @@ Python 3.8.2
 
 ## Usage
 
-- `python factory_gui.py`
+- `python -m industry2`
 
 ## Links
 

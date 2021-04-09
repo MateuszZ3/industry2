@@ -4,7 +4,7 @@ from typing import List
 import numpy as np
 from dataclasses_json import dataclass_json
 
-from enums import Operation
+from industry2.enums import Operation
 
 
 @dataclass_json

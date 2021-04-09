@@ -8,10 +8,9 @@ from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 from spade import quit_spade
 
-import settings
-from agents import FactoryAgent
-from common import Point
-from common import clip
+import industry2.settings as settings
+from industry2.agents import FactoryAgent
+from industry2.common import Point, clip
 
 COLORS = [
     # 17 undertones https://lospec.com/palette-list/17undertones

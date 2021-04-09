@@ -1,4 +1,4 @@
-from enums import Operation
+from industry2.enums import Operation
 
 # manager/factory jid: {*}@{HOST}
 # tr/gom jid: {*_base}{id}@{HOST}
