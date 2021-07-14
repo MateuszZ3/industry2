@@ -14,6 +14,7 @@ Welcome to industry2's documentation!
 
    usage
    explanations
+   reference
 
 TODO
 ----
