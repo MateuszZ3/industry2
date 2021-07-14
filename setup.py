@@ -19,7 +19,7 @@ EXTRAS = {
     # 'fancy feature': ['django'],
 }
 
-with open('README.md') as f:
+with open('README.rst') as f:
     readme = f.read()
 
 setup(
@@ -27,7 +27,7 @@ setup(
     version=VERSION,
     description=DESCRIPTION,
     long_description=readme,
-    long_description_content_type="text/markdown",
+    long_description_content_type="text/x-rst",
     author=AUTHOR,
     author_email=EMAIL,
     python_requires=REQUIRES_PYTHON,
