@@ -12,14 +12,9 @@ a smart, automated factory with a focus on the transport of raw material and int
 Modern Machines* (GoM's) by autonomous *Transport Robots* (TR) assigned to each of them.
 
 By design *Transport Robots* need to cooperate to complete orders issued by their *GoMs*. This in turn entails a
-need to negotiate the order of completing orders. **[Właśnie ta funkcjonalność ma zostać odwzorowana]** using a multi-agent
+need to negotiate the order of completing orders. This functionality is implemented using a multi-agent
 system which enables a consistent cooperation of all the *TRs* on the premises of the workplace, ensures a constant flow
 of goods according to respective priorities, and handles emergency situations.
-
-**[Projekt zostanie wykonany przy pomocy platformy Smart Python Agent Development Environment w wersji 3.1.4
-(SPADE) w języku Python 3.8, w oparciu o protokół komunikacyjny XMPP. Platforma udostępnia bibliotekizawierające zarówno
-bazowe klasy agentów, jak i klasy wiadomości zgodnychze standardem FIPA ACL oraz metody umożliwiające ich obsługę
-wewnątrz kodu.]**
 
 Getting started
 ---------------
