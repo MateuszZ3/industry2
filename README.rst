@@ -38,7 +38,7 @@ Requirements
 ^^^^^^^^^^^^
 
 * Python (>= 3.8.2)
-* A running XMPP server with auto-registration support (we recommend `Prosody <https://prosody.im/>`_).
+* A running XMPP server with auto-registration support (we recommend `Prosody <https://prosody.im/>` for Linux and `Openfire <https://www.igniterealtime.org/projects/openfire/>` for Windows).
 
 Documentation
 -------------
