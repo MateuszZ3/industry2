@@ -45,6 +45,31 @@ Requirements
 * Python (>= 3.8.2)
 * A running XMPP server with auto-registration support (we recommend `Prosody <https://prosody.im/>`_).
 
+Documentation
+-------------
+
+TODO: readthedocs
+
+Local documentation
+^^^^^^^^^^^^^^^^^^
+
+To build the docs locally on your machine, run the following in ``/docs``:
+
+.. code-block:: console
+
+   $ make html
+
+If the build is succesful, you will see a message:
+
+.. code-block::
+   
+   ...
+   build succedeed.
+   
+   The HTML pages are in _build/html.
+   
+Now you can access the index site (``/docs/_build/html/index.html``).
+
 Contribute
 ----------
 
