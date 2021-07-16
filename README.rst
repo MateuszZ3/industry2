@@ -7,14 +7,14 @@ industry2
 Goals
 -----
 
-The aim of this project is to explore the utilisation of a multi-agent system to model complex production processes in
-a smart, automated factory with a focus on the transport of raw material and intermediate goods between *Groups of Ultra
+The aim of this project is to explore the usefulness of a multi-agent system to model complex production processes in
+a smart, automated factory with a focus on the transportation of raw materials and intermediate goods between *Groups of Ultra
 Modern Machines* (GoM's) by autonomous *Transport Robots* (TR) assigned to each of them.
 
 By design *Transport Robots* need to cooperate to complete orders issued by their *GoMs*. This in turn entails a
 need to negotiate the order of completing orders. This functionality is implemented using a multi-agent
-system which enables a consistent cooperation of all the *TRs* on the premises of the workplace, ensures a constant flow
-of goods according to respective priorities, and handles emergency situations.
+system which facilitates continuous cooperation of all the *TRs* on workplace premises, ensures a constant flow
+of goods according to respective priorities and handles emergency situations.
 
 Getting started
 ---------------
