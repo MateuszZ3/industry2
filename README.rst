@@ -38,7 +38,7 @@ Requirements
 ^^^^^^^^^^^^
 
 * Python (>= 3.8.2)
-* A running XMPP server with auto-registration support (we recommend `Prosody <https://prosody.im/>` for Linux and `Openfire <https://www.igniterealtime.org/projects/openfire/>` for Windows).
+* A running XMPP server with auto-registration support (we recommend `Prosody <https://prosody.im/>`_ for Linux and `Openfire <https://www.igniterealtime.org/projects/openfire/>`_ for Windows).
 
 Documentation
 -------------
@@ -46,7 +46,7 @@ Documentation
 TODO: readthedocs
 
 Local documentation
-^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
 
 To build the docs locally on your machine, first you will need to install the dependencies:
 
