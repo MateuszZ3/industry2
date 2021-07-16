@@ -377,7 +377,7 @@ class Canvas(QLabel):
 
 
 class MainWindow(QMainWindow):
-    """Start's up a FactoryWorker, which in turn starts a FactoryAgent and then all other agents. FactoryWorker updates
+    """Starts up a FactoryWorker, which in turn starts a FactoryAgent and then all other agents. FactoryWorker updates
     ViewModel from which MainWindow (Canvas) then reads data."""
 
     def __init__(self, *args, **kwargs):
