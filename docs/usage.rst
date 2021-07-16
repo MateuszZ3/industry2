@@ -11,10 +11,3 @@ Usage
 * This should reference :class:`spade.agent.Agent` in SPADE's docs. Does it?
 
 Does this reference :ref:`getting-started`?
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`

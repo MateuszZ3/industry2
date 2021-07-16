@@ -1,16 +1,22 @@
-industry2
-=========
+**industry2** is a multi-agent system aiming to provide a platform to develop and test negotiation models between
+*Transport Robots* in an `Industry 4.0 <https://www.ibm.com/topics/industry-4-0>`_ setting. Thanks for checking it out.
 
-industry2 is ...
-Thanks for checking it out.
+Goals
+-----
 
-What problem your project solves
+The aim of this project is to explore the utilisation of a multi-agent system to model complex production processes in
+a smart, automated factory with a focus on the transport of raw material and intermediate goods between *Groups of Ultra
+Modern Machines* (GoM's) by autonomous *Transport Robots* (TR) assigned to each of them.
 
-A lot of people will come to your docs trying to figure out what exactly your project is. Someone will mention it, or
-they’ll google a phrase randomly. You should explain what your project does and why it exists. Fabric does a great job
-of this.
+By design *Transport Robots* need to cooperate to complete orders issued by their *GoMs*. This in turn entails a
+need to negotiate the order of completing orders. **[Właśnie ta funkcjonalność ma zostać odwzorowana]** using a multi-agent
+system which enables a consistent cooperation of all the *TRs* on the premises of the workplace, ensures a constant flow
+of goods according to respective priorities, and handles emergency situations.
 
-.. _getting-started:
+**[Projekt zostanie wykonany przy pomocy platformy Smart Python Agent Development Environment w wersji 3.1.4
+(SPADE) w języku Python 3.8, w oparciu o protokół komunikacyjny XMPP. Platforma udostępnia bibliotekizawierające zarówno
+bazowe klasy agentów, jak i klasy wiadomości zgodnychze standardem FIPA ACL oraz metody umożliwiające ich obsługę
+wewnątrz kodu.]**
 
 Getting started
 ---------------
