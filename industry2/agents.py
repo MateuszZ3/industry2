@@ -955,7 +955,6 @@ class TransportRobotAgent(Agent):
 
     def help(self, sender, order):
         return True
-        # return random.random() >= 0.5
 
     def decide(self):
         if len(self.helping) > 0:
