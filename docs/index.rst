@@ -7,6 +7,7 @@ Welcome to industry2's documentation!
 =====================================
 
 .. include:: ../README.rst
+   :start-line: 3
 
 .. toctree::
    :maxdepth: 2

@@ -1,3 +1,6 @@
+industry2
+=========
+
 **industry2** is a multi-agent system aiming to provide a platform to develop and test negotiation models between
 *Transport Robots* in an `Industry 4.0 <https://www.ibm.com/topics/industry-4-0>`_ setting. Thanks for checking it out.
 
