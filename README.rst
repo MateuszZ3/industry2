@@ -53,7 +53,14 @@ TODO: readthedocs
 Local documentation
 ^^^^^^^^^^^^^^^^^^
 
-To build the docs locally on your machine, run the following in ``/docs``:
+To build the docs locally on your machine, first you will need to install the dependencies:
+
+.. code-block:: console
+
+   $ cd docs                          # change directory to the docs folder
+   $ pip install -r requirements.txt  # Install docs dependencies
+
+When the installation is succesful, run the following to build the HTML documentation:
 
 .. code-block:: console
 
