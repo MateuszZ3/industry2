@@ -1,4 +1,4 @@
-from enums import Operation
+from industry2.enums import Operation
 
 # manager/factory jid: {*}@{HOST}
 # tr/gom jid: {*_base}{id}@{HOST}
@@ -27,6 +27,7 @@ OP_DURATIONS = {  # s
     Operation.CUT_GLASS: 1.3,
     Operation.LASER_MARK: 1.4,
 }
+GOM_COUNT = 4
 RECEIVE_TIMEOUT = 15 * 60  # s
 MANAGER_LOOP_TIMEOUT = 0.1  # s
 AGENT_CREATION_SLEEP = 0.1  # s
